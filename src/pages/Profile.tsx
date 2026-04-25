@@ -55,7 +55,7 @@ const Profile = () => {
     setSaving(true);
     const payload: Record<string, any> = {};
     FIELDS.forEach(f => { payload[f.key] = data[f.key]?.trim() || null; });
-    const { error } = await supabase.from("profiles").update(payload).eq("id", user.id);
+    const { error } = await supabase.from("profiles").update(payload as never).eq("id", user.id);
     setSaving(false);
     if (error) toast.error(error.message);
     else toast.success("Profile saved — applications will auto-fill.");
