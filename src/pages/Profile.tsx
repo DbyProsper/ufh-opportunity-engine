@@ -7,18 +7,21 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import { Loader2, Save } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { UFH_FACULTIES, UFH_FACULTY_NAMES } from "@/data/ufh";
 
-const FIELDS: { key: string; label: string; type?: string; textarea?: boolean }[] = [
+type FieldDef = { key: string; label: string; type?: string; textarea?: boolean; kind?: "faculty" | "department" };
+const FIELDS: FieldDef[] = [
   { key: "full_name", label: "Full Name" },
   { key: "email", label: "Email", type: "email" },
   { key: "student_number", label: "Student Number" },
   { key: "staff_number", label: "Staff Number (if applicable)" },
   { key: "phone", label: "Phone", type: "tel" },
-  { key: "faculty", label: "Faculty" },
-  { key: "department", label: "Department" },
+  { key: "faculty", label: "Faculty", kind: "faculty" },
+  { key: "department", label: "Department", kind: "department" },
   { key: "qualification", label: "Qualification / Programme" },
   { key: "year_of_study", label: "Year of Study" },
   { key: "address", label: "Address", textarea: true },
@@ -57,8 +60,12 @@ const Profile = () => {
     FIELDS.forEach(f => { payload[f.key] = data[f.key]?.trim() || null; });
     const { error } = await supabase.from("profiles").update(payload as never).eq("id", user.id);
     setSaving(false);
-    if (error) toast.error(error.message);
-    else toast.success("Profile saved — applications will auto-fill.");
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+    toast.success("Profile saved — applications will auto-fill.");
+    navigate("/dashboard");
   };
 
   if (loading) {
@@ -85,7 +92,34 @@ const Profile = () => {
               {FIELDS.map((f) => (
                 <div key={f.key} className={`space-y-2 ${f.textarea ? "sm:col-span-2" : ""}`}>
                   <Label htmlFor={f.key}>{f.label}</Label>
-                  {f.textarea ? (
+                  {f.kind === "faculty" ? (
+                    <Select
+                      value={data[f.key] || ""}
+                      onValueChange={(v) => setData((p) => ({ ...p, [f.key]: v, department: "" }))}
+                    >
+                      <SelectTrigger id={f.key}><SelectValue placeholder="Select your faculty" /></SelectTrigger>
+                      <SelectContent className="bg-popover z-50">
+                        {UFH_FACULTY_NAMES.map((name) => (
+                          <SelectItem key={name} value={name}>{name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  ) : f.kind === "department" ? (
+                    <Select
+                      value={data[f.key] || ""}
+                      onValueChange={(v) => setData((p) => ({ ...p, [f.key]: v }))}
+                      disabled={!data.faculty}
+                    >
+                      <SelectTrigger id={f.key}>
+                        <SelectValue placeholder={data.faculty ? "Select your department" : "Choose faculty first"} />
+                      </SelectTrigger>
+                      <SelectContent className="bg-popover z-50">
+                        {(UFH_FACULTIES[data.faculty] ?? []).map((d) => (
+                          <SelectItem key={d} value={d}>{d}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  ) : f.textarea ? (
                     <Textarea
                       id={f.key}
                       value={data[f.key] || ""}
