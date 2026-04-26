@@ -56,23 +56,6 @@ const Admin = () => {
     })();
   }, [user]);
 
-  if (!authLoading && user && !isAdmin) {
-    return (
-      <div className="min-h-screen bg-background">
-        <AppHeader />
-        <div className="container mx-auto py-16 max-w-md text-center">
-          <ShieldAlert className="w-12 h-12 text-destructive mx-auto mb-4" />
-          <h2 className="text-xl font-bold mb-2">Admin access required</h2>
-          <p className="text-muted-foreground mb-4">
-            To grant yourself admin access, run this in the Cloud SQL editor:<br/>
-            <code className="text-xs bg-muted p-1 rounded">INSERT INTO user_roles (user_id, role) VALUES ('{user?.id}', 'admin');</code>
-          </p>
-          <Link to="/dashboard"><Button variant="outline">Back to dashboard</Button></Link>
-        </div>
-      </div>
-    );
-  }
-
   const updateAppStatus = async (appId: string, status: string) => {
     const { error } = await supabase.from("applications").update({
       status: status as any,
@@ -134,6 +117,23 @@ const Admin = () => {
     const wf = workflows.find((w) => w.id === a.workflow_id);
     return wf?.target_role === "staff" || wf?.target_role === "any";
   }).length;
+
+  if (!authLoading && user && !isAdmin) {
+    return (
+      <div className="min-h-screen bg-background">
+        <AppHeader />
+        <div className="container mx-auto py-16 max-w-md text-center">
+          <ShieldAlert className="w-12 h-12 text-destructive mx-auto mb-4" />
+          <h2 className="text-xl font-bold mb-2">Admin access required</h2>
+          <p className="text-muted-foreground mb-4">
+            To grant yourself admin access, run this in the Cloud SQL editor:<br/>
+            <code className="text-xs bg-muted p-1 rounded">INSERT INTO user_roles (user_id, role) VALUES ('{user?.id}', 'admin');</code>
+          </p>
+          <Link to="/dashboard"><Button variant="outline">Back to dashboard</Button></Link>
+        </div>
+      </div>
+    );
+  }
 
   if (loading) return <div className="min-h-screen bg-background"><AppHeader /><div className="container py-12 text-center"><Loader2 className="w-6 h-6 animate-spin mx-auto" /></div></div>;
 
