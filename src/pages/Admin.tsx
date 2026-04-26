@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { AppHeader } from "@/components/AppHeader";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
@@ -11,9 +11,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import { rankApplicants } from "@/lib/eligibility";
-import { Loader2, Plus, Sparkles, FileText, Eye, Check, X, ShieldAlert } from "lucide-react";
+import { Loader2, Plus, Sparkles, Eye, Check, X, ShieldAlert, Search, Settings2, Users, GraduationCap } from "lucide-react";
+import { WorkflowEditor } from "@/components/admin/WorkflowEditor";
+import { ApplicationDetail } from "@/components/admin/ApplicationDetail";
 
 const Admin = () => {
   const { user, isAdmin, loading: authLoading } = useAuth();
@@ -25,6 +28,14 @@ const Admin = () => {
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [newWf, setNewWf] = useState({ name: "", slug: "", description: "" });
+  const [editingWf, setEditingWf] = useState<string | null>(null);
+  const [viewingApp, setViewingApp] = useState<string | null>(null);
+
+  // filters
+  const [audienceTab, setAudienceTab] = useState<"all" | "student" | "staff">("all");
+  const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [workflowFilter, setWorkflowFilter] = useState<string>("all");
+  const [search, setSearch] = useState("");
 
   useEffect(() => {
     if (!authLoading && !user) navigate("/auth");
@@ -36,7 +47,7 @@ const Admin = () => {
       const [wfRes, appsRes, profRes] = await Promise.all([
         supabase.from("workflows").select("*").order("created_at", { ascending: false }),
         supabase.from("applications").select("*").order("created_at", { ascending: false }),
-        supabase.from("profiles").select("id,full_name,email,student_number,faculty,department"),
+        supabase.from("profiles").select("id,full_name,email,student_number,staff_number,faculty,department"),
       ]);
       setWorkflows(wfRes.data ?? []);
       setApplications(appsRes.data ?? []);
@@ -96,9 +107,35 @@ const Admin = () => {
     setWorkflows((p) => [data, ...p]);
     setNewWf({ name: "", slug: "", description: "" });
     toast.success("Workflow created. Add steps & fields next.");
+    setEditingWf(data.id);
   };
 
   if (loading) return <div className="min-h-screen bg-background"><AppHeader /><div className="container py-12 text-center"><Loader2 className="w-6 h-6 animate-spin mx-auto" /></div></div>;
+
+  // Apply filters
+  const filteredApps = useMemo(() => {
+    return applications.filter((a) => {
+      const wf = workflows.find((w) => w.id === a.workflow_id);
+      if (audienceTab !== "all" && wf?.target_role !== audienceTab && wf?.target_role !== "any") return false;
+      if (statusFilter !== "all" && a.status !== statusFilter) return false;
+      if (workflowFilter !== "all" && a.workflow_id !== workflowFilter) return false;
+      if (search) {
+        const prof = profiles.find((p) => p.id === a.user_id);
+        const hay = `${prof?.full_name ?? ""} ${prof?.email ?? ""} ${prof?.student_number ?? ""} ${prof?.staff_number ?? ""} ${wf?.name ?? ""}`.toLowerCase();
+        if (!hay.includes(search.toLowerCase())) return false;
+      }
+      return true;
+    });
+  }, [applications, workflows, profiles, audienceTab, statusFilter, workflowFilter, search]);
+
+  const studentCount = applications.filter((a) => {
+    const wf = workflows.find((w) => w.id === a.workflow_id);
+    return wf?.target_role === "student" || wf?.target_role === "any";
+  }).length;
+  const staffCount = applications.filter((a) => {
+    const wf = workflows.find((w) => w.id === a.workflow_id);
+    return wf?.target_role === "staff" || wf?.target_role === "any";
+  }).length;
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
@@ -118,30 +155,78 @@ const Admin = () => {
           </TabsList>
 
           <TabsContent value="applications">
+            {/* Audience tabs */}
+            <Tabs value={audienceTab} onValueChange={(v) => setAudienceTab(v as any)} className="mb-4">
+              <TabsList>
+                <TabsTrigger value="all">All ({applications.length})</TabsTrigger>
+                <TabsTrigger value="student"><GraduationCap className="w-3.5 h-3.5 mr-1" /> Students ({studentCount})</TabsTrigger>
+                <TabsTrigger value="staff"><Users className="w-3.5 h-3.5 mr-1" /> Staff ({staffCount})</TabsTrigger>
+              </TabsList>
+            </Tabs>
+
+            {/* Filter bar */}
+            <Card className="mb-4">
+              <CardContent className="p-3 flex flex-wrap gap-2 items-center">
+                <div className="relative flex-1 min-w-[200px]">
+                  <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                  <Input placeholder="Search name, email, student #…" value={search} onChange={(e) => setSearch(e.target.value)} className="pl-8 h-9" />
+                </div>
+                <Select value={statusFilter} onValueChange={setStatusFilter}>
+                  <SelectTrigger className="h-9 w-[160px]"><SelectValue /></SelectTrigger>
+                  <SelectContent className="bg-popover">
+                    <SelectItem value="all">All statuses</SelectItem>
+                    <SelectItem value="draft">Draft</SelectItem>
+                    <SelectItem value="submitted">Submitted</SelectItem>
+                    <SelectItem value="under_review">Under review</SelectItem>
+                    <SelectItem value="approved">Approved</SelectItem>
+                    <SelectItem value="rejected">Rejected</SelectItem>
+                    <SelectItem value="withdrawn">Withdrawn</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Select value={workflowFilter} onValueChange={setWorkflowFilter}>
+                  <SelectTrigger className="h-9 w-[200px]"><SelectValue /></SelectTrigger>
+                  <SelectContent className="bg-popover">
+                    <SelectItem value="all">All workflows</SelectItem>
+                    {workflows.map((w) => <SelectItem key={w.id} value={w.id}>{w.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+                {(search || statusFilter !== "all" || workflowFilter !== "all") && (
+                  <Button variant="ghost" size="sm" onClick={() => { setSearch(""); setStatusFilter("all"); setWorkflowFilter("all"); }}>
+                    Clear
+                  </Button>
+                )}
+              </CardContent>
+            </Card>
+
             <Card>
               <CardHeader className="flex flex-row items-center justify-between">
-                <CardTitle>All Applications</CardTitle>
+                <CardTitle>{filteredApps.length} {filteredApps.length === 1 ? "result" : "results"}</CardTitle>
                 <Button variant="outline" size="sm" onClick={() => { rankApplicants(applications); toast.info("AI ranking — coming soon"); }}>
                   <Sparkles className="w-3.5 h-3.5 mr-1.5 text-accent" /> Rank Applicants
                 </Button>
               </CardHeader>
               <CardContent>
-                {applications.length === 0 ? (
-                  <p className="text-muted-foreground text-center py-8">No applications yet.</p>
+                {filteredApps.length === 0 ? (
+                  <p className="text-muted-foreground text-center py-8">No applications match these filters.</p>
                 ) : (
                   <div className="space-y-3">
-                    {applications.map((a) => {
+                    {filteredApps.map((a) => {
                       const wf = workflows.find((w) => w.id === a.workflow_id);
                       const prof = profiles.find((p) => p.id === a.user_id);
                       return (
                         <div key={a.id} className="flex items-center justify-between p-3 border rounded-lg gap-3 flex-wrap">
                           <div className="min-w-0 flex-1">
-                            <p className="font-medium text-sm">{prof?.full_name || prof?.email || "Unknown"} <span className="text-muted-foreground font-normal">— {wf?.name}</span></p>
+                            <p className="font-medium text-sm">
+                              {prof?.full_name || prof?.email || "Unknown"}
+                              <span className="text-muted-foreground font-normal"> — {wf?.name}</span>
+                              {wf?.target_role === "staff" && <Badge variant="outline" className="ml-2 text-[10px]">Staff</Badge>}
+                              {wf?.target_role === "student" && <Badge variant="outline" className="ml-2 text-[10px]">Student</Badge>}
+                            </p>
                             <p className="text-xs text-muted-foreground">{prof?.faculty} · {prof?.department}</p>
                           </div>
                           <Badge className={`status-${a.status.replace("_","-")} capitalize`}>{a.status.replace("_"," ")}</Badge>
                           <div className="flex gap-1.5">
-                            <Button size="sm" variant="outline" onClick={() => updateAppStatus(a.id, "under_review")}><Eye className="w-3.5 h-3.5" /></Button>
+                            <Button size="sm" variant="outline" onClick={() => setViewingApp(a.id)}><Eye className="w-3.5 h-3.5" /></Button>
                             <Button size="sm" variant="outline" className="text-success" onClick={() => updateAppStatus(a.id, "approved")}><Check className="w-3.5 h-3.5" /></Button>
                             <Button size="sm" variant="outline" className="text-destructive" onClick={() => updateAppStatus(a.id, "rejected")}><X className="w-3.5 h-3.5" /></Button>
                           </div>
@@ -194,15 +279,35 @@ const Admin = () => {
                     </div>
                     <p className="text-xs text-muted-foreground line-clamp-2 mb-3">{w.description}</p>
                     <p className="text-xs text-muted-foreground">/{w.slug}</p>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      {applications.filter((a) => a.workflow_id === w.id).length} applications
-                    </p>
+                    <div className="flex items-center justify-between mt-3">
+                      <p className="text-xs text-muted-foreground">
+                        {applications.filter((a) => a.workflow_id === w.id).length} applications
+                      </p>
+                      <Button size="sm" variant="outline" onClick={() => setEditingWf(w.id)}>
+                        <Settings2 className="w-3.5 h-3.5 mr-1" /> Edit
+                      </Button>
+                    </div>
                   </CardContent>
                 </Card>
               ))}
             </div>
           </TabsContent>
         </Tabs>
+
+        {editingWf && (
+          <WorkflowEditor workflowId={editingWf} onClose={() => {
+            setEditingWf(null);
+            // refresh workflows so meta changes show
+            supabase.from("workflows").select("*").order("created_at", { ascending: false }).then(({ data }) => setWorkflows(data ?? []));
+          }} />
+        )}
+        {viewingApp && (
+          <ApplicationDetail
+            applicationId={viewingApp}
+            onClose={() => setViewingApp(null)}
+            onStatusChange={(id, status) => setApplications((p) => p.map((a) => a.id === id ? { ...a, status } : a))}
+          />
+        )}
       </main>
     </div>
   );
