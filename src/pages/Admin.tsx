@@ -110,9 +110,7 @@ const Admin = () => {
     setEditingWf(data.id);
   };
 
-  if (loading) return <div className="min-h-screen bg-background"><AppHeader /><div className="container py-12 text-center"><Loader2 className="w-6 h-6 animate-spin mx-auto" /></div></div>;
-
-  // Apply filters
+  // Apply filters (must be before early returns to keep hook order stable)
   const filteredApps = useMemo(() => {
     return applications.filter((a) => {
       const wf = workflows.find((w) => w.id === a.workflow_id);
@@ -136,6 +134,8 @@ const Admin = () => {
     const wf = workflows.find((w) => w.id === a.workflow_id);
     return wf?.target_role === "staff" || wf?.target_role === "any";
   }).length;
+
+  if (loading) return <div className="min-h-screen bg-background"><AppHeader /><div className="container py-12 text-center"><Loader2 className="w-6 h-6 animate-spin mx-auto" /></div></div>;
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
