@@ -232,6 +232,49 @@ const Apply = () => {
 
             {isLastStep && (
               <>
+                {/* Profile snapshot */}
+                <div>
+                  <h3 className="font-semibold mb-3">Your Profile</h3>
+                  <div className="grid sm:grid-cols-2 gap-3 p-4 border rounded-lg bg-muted/30 text-sm">
+                    {[
+                      ["Full Name", profile?.full_name],
+                      ["Email", profile?.email],
+                      ["Student Number", profile?.student_number],
+                      ["Phone", profile?.phone],
+                      ["Faculty", profile?.faculty],
+                      ["Department", profile?.department],
+                      ["Qualification", profile?.qualification],
+                      ["Year of Study", profile?.year_of_study],
+                    ].map(([label, val]) => (
+                      <div key={label as string}>
+                        <p className="text-[11px] uppercase tracking-wide text-muted-foreground">{label}</p>
+                        <p className="font-medium">{val || <span className="text-muted-foreground italic">Not set</span>}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* All field responses, grouped by step */}
+                {steps.map((s) => {
+                  const sf = fields.filter((f) => f.step_id === s.id);
+                  if (sf.length === 0) return null;
+                  return (
+                    <div key={s.id}>
+                      <h3 className="font-semibold mb-3">{s.title}</h3>
+                      <div className="space-y-2 p-4 border rounded-lg bg-muted/30 text-sm">
+                        {sf.map((f) => (
+                          <div key={f.id} className="flex flex-col sm:flex-row sm:gap-3 border-b last:border-b-0 pb-2 last:pb-0">
+                            <p className="text-muted-foreground sm:w-1/3 text-xs sm:text-sm">{f.label}</p>
+                            <p className="font-medium flex-1 break-words">
+                              {responses[f.id] || <span className="text-muted-foreground italic">Not answered</span>}
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
+
                 <div>
                   <h3 className="font-semibold mb-3">Required Documents</h3>
                   <div className="space-y-3">
