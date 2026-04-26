@@ -53,7 +53,16 @@ const Apply = () => {
       // get-or-create application
       let { data: app } = await supabase.from("applications").select("*").eq("user_id", user.id).eq("workflow_id", wf.id).maybeSingle();
       if (!app) {
-        const { data: newApp } = await supabase.from("applications").insert({ user_id: user.id, workflow_id: wf.id, status: "draft" }).select().single();
+        const { data: newApp, error: createErr } = await supabase
+          .from("applications")
+          .insert({ user_id: user.id, workflow_id: wf.id, status: "draft" })
+          .select()
+          .single();
+        if (createErr) {
+          toast.error(`Could not start application: ${createErr.message}`);
+          setLoading(false);
+          return;
+        }
         app = newApp;
       }
       setApplication(app);
@@ -133,6 +142,10 @@ const Apply = () => {
   };
 
   const submit = async () => {
+    if (!application) {
+      toast.error("Application not initialised. Please refresh and try again.");
+      return;
+    }
     const { missingFields, missingDocs } = validateAll();
     if (missingFields.length || missingDocs.length) {
       toast.error(`Missing ${missingFields.length} field(s) and ${missingDocs.length} document(s)`);
@@ -145,7 +158,7 @@ const Apply = () => {
       is_editable: false,
     }).eq("id", application.id);
     setSubmitting(false);
-    if (error) toast.error(error.message);
+    if (error) toast.error(`Submit failed: ${error.message}`);
     else {
       toast.success("Application submitted!");
       // create notification
