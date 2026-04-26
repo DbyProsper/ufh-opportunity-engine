@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { AppHeader } from "@/components/AppHeader";
+import { Typewriter } from "@/components/Typewriter";
 
 const Index = () => {
   const { user } = useAuth();
@@ -31,13 +32,19 @@ const Index = () => {
               <Sparkles className="w-3.5 h-3.5 text-accent" />
               All UFH opportunities, one hub
             </div>
-            <h1 className="text-4xl md:text-6xl font-bold text-white mb-6 leading-tight animate-fade-in">
-              Discover & Apply for{" "}
-              <span className="text-accent">Academic Opportunities</span>
+            <h1 className="text-4xl md:text-6xl font-bold text-white mb-6 leading-tight animate-fade-in min-h-[3.5em] md:min-h-[2.4em]">
+              <Typewriter
+                text="Discover & Apply for Academic Opportunities"
+                speed={35}
+                startDelay={300}
+              />
             </h1>
-            <p className="text-base md:text-xl text-white/80 mb-8 max-w-2xl mx-auto animate-fade-in">
-              Tutorships, bursaries, leadership roles and more. One profile, smart auto-fill,
-              and a clear path from application to offer.
+            <p className="text-base md:text-xl text-white/80 mb-8 max-w-2xl mx-auto animate-fade-in min-h-[3.5em]">
+              <Typewriter
+                text="Tutorships, bursaries, leadership roles and more. One profile, smart auto-fill, and a clear path from application to offer."
+                speed={18}
+                startDelay={1800}
+              />
             </p>
             <div className="flex flex-col sm:flex-row items-center justify-center gap-3 animate-fade-in">
               <Link to={user ? "/dashboard" : "/auth?mode=signup"}>
