@@ -12,9 +12,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { useDebouncedCallback } from "@/hooks/useDebounce";
-import { Check, ChevronLeft, ChevronRight, Loader2, Send, Upload, FileText, Trash2 } from "lucide-react";
+import { Check, ChevronLeft, ChevronRight, Loader2, Send, Upload, FileText, Trash2, Eye } from "lucide-react";
 import { MessageThread } from "@/components/MessageThread";
 import { Download } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 
 const Apply = () => {
   const { slug } = useParams();
@@ -122,6 +123,17 @@ const Apply = () => {
       application_id: application.id, document_id: docId, file_path: path, file_name: file.name,
     }).select().single();
     if (inserted) setUploadedDocs((p) => [...p, inserted]);
+    // Back-fill into profile document library so future applications can reuse it
+    const docMeta = docs.find((d) => d.id === docId);
+    if (docMeta?.name) {
+      await supabase.from("profile_documents").upsert({
+        user_id: user.id,
+        label: docMeta.name,
+        file_name: file.name,
+        file_path: path,
+        source_application_id: application.id,
+      } as never, { onConflict: "user_id,label" });
+    }
     toast.success(`Uploaded ${file.name}`);
   };
 
