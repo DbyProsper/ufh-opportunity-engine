@@ -6,7 +6,9 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
-import { Calendar, Check, Clock, Eye, FileText, Loader2, Mail, Phone, User, X } from "lucide-react";
+import { Calendar, Check, Clock, Download, Eye, FileText, Loader2, Mail, MessageSquare, Phone, User, X } from "lucide-react";
+import { MessageThread } from "@/components/MessageThread";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface Props {
   applicationId: string;
@@ -15,6 +17,7 @@ interface Props {
 }
 
 export const ApplicationDetail = ({ applicationId, onClose, onStatusChange }: Props) => {
+  const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [app, setApp] = useState<any>(null);
   const [profile, setProfile] = useState<any>(null);
@@ -66,6 +69,24 @@ export const ApplicationDetail = ({ applicationId, onClose, onStatusChange }: Pr
     window.open(data.signedUrl, "_blank");
   };
 
+  const [packLoading, setPackLoading] = useState(false);
+  const downloadPack = async () => {
+    setPackLoading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("generate-application-pdf", {
+        body: { applicationId },
+      });
+      if (error) throw error;
+      const url = (data as any)?.url;
+      if (url) window.open(url, "_blank");
+      else toast.error("Could not generate PDF pack");
+    } catch (e: any) {
+      toast.error(e?.message ?? "Failed to generate PDF");
+    } finally {
+      setPackLoading(false);
+    }
+  };
+
   const setStatus = async (status: string) => {
     const { error } = await supabase.from("applications").update({
       status: status as any, reviewed_at: new Date().toISOString(), review_notes: reviewNotes || null,
@@ -115,6 +136,7 @@ export const ApplicationDetail = ({ applicationId, onClose, onStatusChange }: Pr
             <TabsTrigger value="responses">Responses</TabsTrigger>
             <TabsTrigger value="profile">Applicant</TabsTrigger>
             <TabsTrigger value="docs">Documents ({docs.length})</TabsTrigger>
+            <TabsTrigger value="messages"><MessageSquare className="w-3.5 h-3.5 mr-1" /> Messages</TabsTrigger>
             <TabsTrigger value="timeline">Timeline</TabsTrigger>
           </TabsList>
 
@@ -178,6 +200,12 @@ export const ApplicationDetail = ({ applicationId, onClose, onStatusChange }: Pr
             })}
           </TabsContent>
 
+          <TabsContent value="messages" className="mt-4">
+            {user && app && (
+              <MessageThread applicationId={app.id} applicantId={app.user_id} />
+            )}
+          </TabsContent>
+
           <TabsContent value="timeline" className="mt-4">
             <ol className="relative border-l border-border pl-6 space-y-5">
               {timeline.map((t, i) => (
@@ -200,6 +228,10 @@ export const ApplicationDetail = ({ applicationId, onClose, onStatusChange }: Pr
 
         <DialogFooter className="gap-2 flex-wrap">
           <Button variant="outline" onClick={onClose}>Close</Button>
+          <Button variant="outline" onClick={downloadPack} disabled={packLoading}>
+            {packLoading ? <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" /> : <Download className="w-3.5 h-3.5 mr-1" />}
+            PDF pack
+          </Button>
           <Button variant="outline" onClick={() => setStatus("under_review")}><Eye className="w-3.5 h-3.5 mr-1" /> Under review</Button>
           <Button variant="outline" className="text-destructive" onClick={() => setStatus("rejected")}><X className="w-3.5 h-3.5 mr-1" /> Reject</Button>
           <Button className="btn-gradient-primary text-primary-foreground" onClick={() => setStatus("approved")}><Check className="w-3.5 h-3.5 mr-1" /> Approve</Button>
