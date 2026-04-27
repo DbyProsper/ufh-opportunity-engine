@@ -364,7 +364,7 @@ const Apply = () => {
             <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle className="text-lg">Messages with reviewers</CardTitle>
               {application.status === "approved" && (
-                <DownloadPackButton applicationId={application.id} />
+                <PreviewPackButton applicationId={application.id} />
               )}
             </CardHeader>
             <CardContent>
@@ -377,29 +377,58 @@ const Apply = () => {
   );
 };
 
-const DownloadPackButton = ({ applicationId }: { applicationId: string }) => {
+export const PreviewPackButton = ({ applicationId, label = "Preview pack" }: { applicationId: string; label?: string }) => {
   const [loading, setLoading] = useState(false);
-  const handle = async () => {
-    setLoading(true);
+  const [open, setOpen] = useState(false);
+  const [url, setUrl] = useState<string | null>(null);
+  const generate = async () => {
+    setLoading(true); setOpen(true); setUrl(null);
     try {
-      const { data, error } = await supabase.functions.invoke("generate-application-pdf", {
-        body: { applicationId },
-      });
+      const { data, error } = await supabase.functions.invoke("generate-application-pdf", { body: { applicationId } });
       if (error) throw error;
-      const url = (data as any)?.url;
-      if (url) window.open(url, "_blank");
-      else toast.error("Could not generate PDF pack");
+      const u = (data as any)?.url;
+      if (!u) throw new Error("No URL returned");
+      setUrl(u);
     } catch (e: any) {
       toast.error(e?.message ?? "Failed to generate PDF");
+      setOpen(false);
     } finally {
       setLoading(false);
     }
   };
   return (
-    <Button size="sm" variant="outline" onClick={handle} disabled={loading}>
-      {loading ? <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" /> : <Download className="w-3.5 h-3.5 mr-1" />}
-      Download pack
-    </Button>
+    <>
+      <Button size="sm" variant="outline" onClick={generate} disabled={loading}>
+        {loading ? <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" /> : <Eye className="w-3.5 h-3.5 mr-1" />}
+        {label}
+      </Button>
+      <Dialog open={open} onOpenChange={(o) => { if (!o) { setOpen(false); setUrl(null); } }}>
+        <DialogContent className="max-w-5xl h-[85vh] flex flex-col p-4">
+          <DialogHeader>
+            <DialogTitle>Application pack preview</DialogTitle>
+          </DialogHeader>
+          <div className="flex-1 min-h-0 border rounded-md overflow-hidden bg-muted">
+            {url ? (
+              <iframe src={url} title="Application pack" className="w-full h-full" />
+            ) : (
+              <div className="w-full h-full flex items-center justify-center text-sm text-muted-foreground gap-2">
+                <Loader2 className="w-4 h-4 animate-spin" /> Generating preview…
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setOpen(false); setUrl(null); }}>Close</Button>
+            <Button
+              className="btn-gradient-primary text-primary-foreground"
+              disabled={!url}
+              onClick={() => url && window.open(url, "_blank")}
+            >
+              <Download className="w-3.5 h-3.5 mr-1" /> Download
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 };
 
