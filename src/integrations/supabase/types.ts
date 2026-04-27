@@ -177,6 +177,65 @@ export type Database = {
           },
         ]
       }
+      message_threads: {
+        Row: {
+          application_id: string
+          created_at: string
+          id: string
+          last_message_at: string
+          subject: string | null
+        }
+        Insert: {
+          application_id: string
+          created_at?: string
+          id?: string
+          last_message_at?: string
+          subject?: string | null
+        }
+        Update: {
+          application_id?: string
+          created_at?: string
+          id?: string
+          last_message_at?: string
+          subject?: string | null
+        }
+        Relationships: []
+      }
+      messages: {
+        Row: {
+          body: string
+          created_at: string
+          id: string
+          read_at: string | null
+          sender_id: string
+          thread_id: string
+        }
+        Insert: {
+          body: string
+          created_at?: string
+          id?: string
+          read_at?: string | null
+          sender_id: string
+          thread_id: string
+        }
+        Update: {
+          body?: string
+          created_at?: string
+          id?: string
+          read_at?: string | null
+          sender_id?: string
+          thread_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "messages_thread_id_fkey"
+            columns: ["thread_id"]
+            isOneToOne: false
+            referencedRelation: "message_threads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       notifications: {
         Row: {
           body: string | null
