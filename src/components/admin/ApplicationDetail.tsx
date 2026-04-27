@@ -6,9 +6,10 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
-import { Calendar, Check, Clock, Download, Eye, FileText, Loader2, Mail, MessageSquare, Phone, User, X } from "lucide-react";
+import { Calendar, Check, Clock, Eye, FileText, Loader2, Mail, MessageSquare, Phone, User, X } from "lucide-react";
 import { MessageThread } from "@/components/MessageThread";
 import { useAuth } from "@/contexts/AuthContext";
+import { PreviewPackButton } from "@/pages/Apply";
 
 interface Props {
   applicationId: string;
@@ -67,24 +68,6 @@ export const ApplicationDetail = ({ applicationId, onClose, onStatusChange }: Pr
     const { data, error } = await supabase.storage.from("application-documents").createSignedUrl(path, 60 * 5);
     if (error || !data) return toast.error("Could not open file");
     window.open(data.signedUrl, "_blank");
-  };
-
-  const [packLoading, setPackLoading] = useState(false);
-  const downloadPack = async () => {
-    setPackLoading(true);
-    try {
-      const { data, error } = await supabase.functions.invoke("generate-application-pdf", {
-        body: { applicationId },
-      });
-      if (error) throw error;
-      const url = (data as any)?.url;
-      if (url) window.open(url, "_blank");
-      else toast.error("Could not generate PDF pack");
-    } catch (e: any) {
-      toast.error(e?.message ?? "Failed to generate PDF");
-    } finally {
-      setPackLoading(false);
-    }
   };
 
   const setStatus = async (status: string) => {
@@ -228,10 +211,7 @@ export const ApplicationDetail = ({ applicationId, onClose, onStatusChange }: Pr
 
         <DialogFooter className="gap-2 flex-wrap">
           <Button variant="outline" onClick={onClose}>Close</Button>
-          <Button variant="outline" onClick={downloadPack} disabled={packLoading}>
-            {packLoading ? <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" /> : <Download className="w-3.5 h-3.5 mr-1" />}
-            PDF pack
-          </Button>
+          <PreviewPackButton applicationId={applicationId} label="PDF pack" />
           <Button variant="outline" onClick={() => setStatus("under_review")}><Eye className="w-3.5 h-3.5 mr-1" /> Under review</Button>
           <Button variant="outline" className="text-destructive" onClick={() => setStatus("rejected")}><X className="w-3.5 h-3.5 mr-1" /> Reject</Button>
           <Button className="btn-gradient-primary text-primary-foreground" onClick={() => setStatus("approved")}><Check className="w-3.5 h-3.5 mr-1" /> Approve</Button>

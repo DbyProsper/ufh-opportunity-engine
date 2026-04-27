@@ -9,7 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Loader2, Save } from "lucide-react";
+import { Loader2, Save, Upload, FileText, Sparkles, Trash2, Eye } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { UFH_FACULTIES, UFH_FACULTY_NAMES } from "@/data/ufh";
 
@@ -34,6 +34,11 @@ const Profile = () => {
   const [data, setData] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [cvPath, setCvPath] = useState<string | null>(null);
+  const [cvUploadedAt, setCvUploadedAt] = useState<string | null>(null);
+  const [cvUploading, setCvUploading] = useState(false);
+  const [cvParsing, setCvParsing] = useState(false);
+  const [profileDocs, setProfileDocs] = useState<any[]>([]);
 
   useEffect(() => {
     if (!authLoading && !user) navigate("/auth");
@@ -47,7 +52,11 @@ const Profile = () => {
         const initial: Record<string, string> = {};
         FIELDS.forEach(f => { initial[f.key] = (p as any)[f.key] ?? ""; });
         setData(initial);
+        setCvPath((p as any).cv_path ?? null);
+        setCvUploadedAt((p as any).cv_uploaded_at ?? null);
       }
+      const { data: pd } = await supabase.from("profile_documents").select("*").eq("user_id", user.id).order("created_at", { ascending: false });
+      setProfileDocs(pd ?? []);
       setLoading(false);
     })();
   }, [user]);
@@ -68,6 +77,78 @@ const Profile = () => {
     navigate("/dashboard");
   };
 
+  const reloadProfile = async () => {
+    if (!user) return;
+    const { data: p } = await supabase.from("profiles").select("*").eq("id", user.id).maybeSingle();
+    if (!p) return;
+    const initial: Record<string, string> = {};
+    FIELDS.forEach((f) => { initial[f.key] = (p as any)[f.key] ?? ""; });
+    setData(initial);
+    setCvPath((p as any).cv_path ?? null);
+    setCvUploadedAt((p as any).cv_uploaded_at ?? null);
+  };
+
+  const handleCvUpload = async (file: File) => {
+    if (!user) return;
+    const allowed = ["application/pdf", "image/png", "image/jpeg", "image/jpg", "image/webp"];
+    if (!allowed.includes(file.type)) {
+      toast.error("Upload a PDF or image of your CV.");
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error("CV must be under 10 MB.");
+      return;
+    }
+    setCvUploading(true);
+    const ext = (file.name.split(".").pop() || "pdf").toLowerCase();
+    const path = `${user.id}/cv-${Date.now()}.${ext}`;
+    const { error: upErr } = await supabase.storage.from("user-cvs").upload(path, file, { upsert: true, contentType: file.type });
+    if (upErr) { setCvUploading(false); toast.error(upErr.message); return; }
+    setCvUploading(false);
+    setCvParsing(true);
+    toast.info("CV uploaded — parsing with AI…");
+    try {
+      const { data: res, error } = await supabase.functions.invoke("parse-cv", { body: { cvPath: path } });
+      if (error) throw error;
+      const applied = (res as any)?.applied ?? {};
+      const filled = Object.keys(applied).filter((k) => !["cv_path", "cv_uploaded_at", "cv_text"].includes(k));
+      toast.success(filled.length ? `Auto-filled ${filled.length} field(s) from your CV.` : "CV saved. No new fields needed filling.");
+      await reloadProfile();
+    } catch (e: any) {
+      toast.error(e?.message ?? "Could not parse CV");
+    } finally {
+      setCvParsing(false);
+    }
+  };
+
+  const viewCv = async () => {
+    if (!cvPath) return;
+    const { data, error } = await supabase.storage.from("user-cvs").createSignedUrl(cvPath, 60 * 5);
+    if (error || !data) return toast.error("Could not open CV");
+    window.open(data.signedUrl, "_blank");
+  };
+
+  const removeCv = async () => {
+    if (!user || !cvPath) return;
+    await supabase.storage.from("user-cvs").remove([cvPath]);
+    await supabase.from("profiles").update({ cv_path: null, cv_uploaded_at: null, cv_text: null } as never).eq("id", user.id);
+    setCvPath(null); setCvUploadedAt(null);
+    toast.success("CV removed.");
+  };
+
+  const viewProfileDoc = async (path: string) => {
+    const { data, error } = await supabase.storage.from("application-documents").createSignedUrl(path, 60 * 5);
+    if (error || !data) return toast.error("Could not open document");
+    window.open(data.signedUrl, "_blank");
+  };
+
+  const removeProfileDoc = async (id: string) => {
+    const { error } = await supabase.from("profile_documents").delete().eq("id", id);
+    if (error) return toast.error(error.message);
+    setProfileDocs((p) => p.filter((d) => d.id !== id));
+    toast.success("Removed from profile library.");
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-background">
@@ -85,6 +166,56 @@ const Profile = () => {
         <p className="text-muted-foreground mb-6">
           Update once — every application form will auto-fill from these details.
         </p>
+
+        {/* CV upload + AI auto-fill */}
+        <Card className="mb-6 border-primary/20">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Sparkles className="w-4 h-4 text-accent" /> Auto-fill from your CV
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm text-muted-foreground mb-3">
+              Upload your CV (PDF or image). AI will read it and fill in any blank fields below — your existing answers are kept.
+            </p>
+            {cvPath ? (
+              <div className="flex items-center justify-between gap-3 p-3 border rounded-lg bg-muted/30 flex-wrap">
+                <div className="flex items-center gap-2 min-w-0">
+                  <FileText className="w-4 h-4 text-primary shrink-0" />
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium truncate">CV on file</p>
+                    <p className="text-xs text-muted-foreground">
+                      Uploaded {cvUploadedAt ? new Date(cvUploadedAt).toLocaleString() : ""}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex gap-1.5">
+                  <Button size="sm" variant="outline" onClick={viewCv}><Eye className="w-3.5 h-3.5 mr-1" /> View</Button>
+                  <label className={`cursor-pointer ${cvUploading || cvParsing ? "opacity-50 pointer-events-none" : ""}`}>
+                    <input type="file" accept=".pdf,image/*" className="hidden" onChange={(e) => e.target.files?.[0] && handleCvUpload(e.target.files[0])} />
+                    <span className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md border bg-background hover:bg-muted">
+                      <Upload className="w-3 h-3" /> Replace
+                    </span>
+                  </label>
+                  <Button size="sm" variant="outline" className="text-destructive" onClick={removeCv}><Trash2 className="w-3.5 h-3.5" /></Button>
+                </div>
+              </div>
+            ) : (
+              <label className={`flex items-center justify-center gap-2 w-full py-6 border-2 border-dashed rounded-lg cursor-pointer hover:bg-muted/40 ${cvUploading || cvParsing ? "opacity-60 pointer-events-none" : ""}`}>
+                <input type="file" accept=".pdf,image/*" className="hidden" onChange={(e) => e.target.files?.[0] && handleCvUpload(e.target.files[0])} />
+                {cvUploading ? <><Loader2 className="w-4 h-4 animate-spin" /> Uploading…</>
+                  : cvParsing ? <><Sparkles className="w-4 h-4 animate-pulse text-accent" /> Reading CV with AI…</>
+                  : <><Upload className="w-4 h-4" /> <span className="text-sm">Click to upload your CV (PDF or image)</span></>}
+              </label>
+            )}
+            {cvParsing && (
+              <p className="text-xs text-muted-foreground mt-2 flex items-center gap-1">
+                <Loader2 className="w-3 h-3 animate-spin" /> AI is filling blank fields — this can take 10–20 seconds.
+              </p>
+            )}
+          </CardContent>
+        </Card>
+
         <Card>
           <CardHeader><CardTitle>Personal & Academic Details</CardTitle></CardHeader>
           <CardContent>
@@ -143,6 +274,39 @@ const Profile = () => {
                 </Button>
               </div>
             </form>
+          </CardContent>
+        </Card>
+
+        {/* Profile document library — auto-built from past applications */}
+        <Card className="mt-6">
+          <CardHeader>
+            <CardTitle className="text-base">Saved documents</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-xs text-muted-foreground mb-3">
+              Documents you've uploaded to past applications are saved here so future applications can re-use them.
+            </p>
+            {profileDocs.length === 0 ? (
+              <p className="text-sm text-muted-foreground italic">No saved documents yet — they'll appear after your first application.</p>
+            ) : (
+              <ul className="space-y-2">
+                {profileDocs.map((d) => (
+                  <li key={d.id} className="flex items-center justify-between p-2.5 border rounded-lg gap-2">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <FileText className="w-4 h-4 text-primary shrink-0" />
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium truncate">{d.label}</p>
+                        <p className="text-xs text-muted-foreground truncate">{d.file_name}</p>
+                      </div>
+                    </div>
+                    <div className="flex gap-1.5 shrink-0">
+                      <Button size="sm" variant="outline" onClick={() => viewProfileDoc(d.file_path)}><Eye className="w-3.5 h-3.5" /></Button>
+                      <Button size="sm" variant="outline" className="text-destructive" onClick={() => removeProfileDoc(d.id)}><Trash2 className="w-3.5 h-3.5" /></Button>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
           </CardContent>
         </Card>
       </main>

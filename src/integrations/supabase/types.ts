@@ -310,12 +310,45 @@ export type Database = {
           },
         ]
       }
+      profile_documents: {
+        Row: {
+          created_at: string
+          file_name: string
+          file_path: string
+          id: string
+          label: string
+          source_application_id: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          file_name: string
+          file_path: string
+          id?: string
+          label: string
+          source_application_id?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          file_name?: string
+          file_path?: string
+          id?: string
+          label?: string
+          source_application_id?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           address: string | null
           avatar_url: string | null
           bio: string | null
           created_at: string
+          cv_path: string | null
+          cv_text: string | null
+          cv_uploaded_at: string | null
           department: string | null
           email: string
           faculty: string | null
@@ -333,6 +366,9 @@ export type Database = {
           avatar_url?: string | null
           bio?: string | null
           created_at?: string
+          cv_path?: string | null
+          cv_text?: string | null
+          cv_uploaded_at?: string | null
           department?: string | null
           email: string
           faculty?: string | null
@@ -350,6 +386,9 @@ export type Database = {
           avatar_url?: string | null
           bio?: string | null
           created_at?: string
+          cv_path?: string | null
+          cv_text?: string | null
+          cv_uploaded_at?: string | null
           department?: string | null
           email?: string
           faculty?: string | null

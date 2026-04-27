@@ -17,6 +17,7 @@ import { rankApplicants } from "@/lib/eligibility";
 import { Loader2, Plus, Sparkles, Eye, Check, X, ShieldAlert, Search, Settings2, Users, GraduationCap } from "lucide-react";
 import { WorkflowEditor } from "@/components/admin/WorkflowEditor";
 import { ApplicationDetail } from "@/components/admin/ApplicationDetail";
+import { UFH_FACULTIES, UFH_FACULTY_NAMES } from "@/data/ufh";
 
 const Admin = () => {
   const { user, isAdmin, loading: authLoading } = useAuth();
@@ -35,6 +36,10 @@ const Admin = () => {
   const [audienceTab, setAudienceTab] = useState<"all" | "student" | "staff">("all");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [workflowFilter, setWorkflowFilter] = useState<string>("all");
+  const [facultyFilter, setFacultyFilter] = useState<string>("all");
+  const [departmentFilter, setDepartmentFilter] = useState<string>("all");
+  const [dateFrom, setDateFrom] = useState<string>("");
+  const [dateTo, setDateTo] = useState<string>("");
   const [search, setSearch] = useState("");
 
   useEffect(() => {
@@ -100,14 +105,32 @@ const Admin = () => {
       if (audienceTab !== "all" && wf?.target_role !== audienceTab && wf?.target_role !== "any") return false;
       if (statusFilter !== "all" && a.status !== statusFilter) return false;
       if (workflowFilter !== "all" && a.workflow_id !== workflowFilter) return false;
+      const prof = profiles.find((p) => p.id === a.user_id);
+      if (facultyFilter !== "all" && prof?.faculty !== facultyFilter) return false;
+      if (departmentFilter !== "all" && prof?.department !== departmentFilter) return false;
+      if (dateFrom) {
+        const ref = a.submitted_at || a.created_at;
+        if (!ref || new Date(ref) < new Date(dateFrom)) return false;
+      }
+      if (dateTo) {
+        const ref = a.submitted_at || a.created_at;
+        // include the whole "to" day
+        const end = new Date(dateTo); end.setHours(23, 59, 59, 999);
+        if (!ref || new Date(ref) > end) return false;
+      }
       if (search) {
-        const prof = profiles.find((p) => p.id === a.user_id);
         const hay = `${prof?.full_name ?? ""} ${prof?.email ?? ""} ${prof?.student_number ?? ""} ${prof?.staff_number ?? ""} ${wf?.name ?? ""}`.toLowerCase();
         if (!hay.includes(search.toLowerCase())) return false;
       }
       return true;
     });
-  }, [applications, workflows, profiles, audienceTab, statusFilter, workflowFilter, search]);
+  }, [applications, workflows, profiles, audienceTab, statusFilter, workflowFilter, facultyFilter, departmentFilter, dateFrom, dateTo, search]);
+
+  const departmentOptions = facultyFilter === "all"
+    ? Array.from(new Set(Object.values(UFH_FACULTIES).flat()))
+    : (UFH_FACULTIES[facultyFilter] ?? []);
+
+  const filtersActive = !!(search || statusFilter !== "all" || workflowFilter !== "all" || facultyFilter !== "all" || departmentFilter !== "all" || dateFrom || dateTo);
 
   const studentCount = applications.filter((a) => {
     const wf = workflows.find((w) => w.id === a.workflow_id);
@@ -166,35 +189,61 @@ const Admin = () => {
 
             {/* Filter bar */}
             <Card className="mb-4">
-              <CardContent className="p-3 flex flex-wrap gap-2 items-center">
+              <CardContent className="p-3 grid gap-2 md:grid-cols-12 items-end">
                 <div className="relative flex-1 min-w-[200px]">
                   <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
                   <Input placeholder="Search name, email, student #…" value={search} onChange={(e) => setSearch(e.target.value)} className="pl-8 h-9" />
                 </div>
-                <Select value={statusFilter} onValueChange={setStatusFilter}>
-                  <SelectTrigger className="h-9 w-[160px]"><SelectValue /></SelectTrigger>
-                  <SelectContent className="bg-popover">
-                    <SelectItem value="all">All statuses</SelectItem>
-                    <SelectItem value="draft">Draft</SelectItem>
-                    <SelectItem value="submitted">Submitted</SelectItem>
-                    <SelectItem value="under_review">Under review</SelectItem>
-                    <SelectItem value="approved">Approved</SelectItem>
-                    <SelectItem value="rejected">Rejected</SelectItem>
-                    <SelectItem value="withdrawn">Withdrawn</SelectItem>
-                  </SelectContent>
-                </Select>
-                <Select value={workflowFilter} onValueChange={setWorkflowFilter}>
-                  <SelectTrigger className="h-9 w-[200px]"><SelectValue /></SelectTrigger>
-                  <SelectContent className="bg-popover">
-                    <SelectItem value="all">All workflows</SelectItem>
-                    {workflows.map((w) => <SelectItem key={w.id} value={w.id}>{w.name}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-                {(search || statusFilter !== "all" || workflowFilter !== "all") && (
-                  <Button variant="ghost" size="sm" onClick={() => { setSearch(""); setStatusFilter("all"); setWorkflowFilter("all"); }}>
-                    Clear
-                  </Button>
-                )}
+                <div className="md:col-span-12 grid grid-cols-2 md:grid-cols-7 gap-2">
+                  <Select value={statusFilter} onValueChange={setStatusFilter}>
+                    <SelectTrigger className="h-9"><SelectValue placeholder="Status" /></SelectTrigger>
+                    <SelectContent className="bg-popover">
+                      <SelectItem value="all">All statuses</SelectItem>
+                      <SelectItem value="draft">Draft</SelectItem>
+                      <SelectItem value="submitted">Submitted</SelectItem>
+                      <SelectItem value="under_review">Under review</SelectItem>
+                      <SelectItem value="approved">Approved</SelectItem>
+                      <SelectItem value="rejected">Rejected</SelectItem>
+                      <SelectItem value="withdrawn">Withdrawn</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Select value={workflowFilter} onValueChange={setWorkflowFilter}>
+                    <SelectTrigger className="h-9"><SelectValue placeholder="Workflow" /></SelectTrigger>
+                    <SelectContent className="bg-popover">
+                      <SelectItem value="all">All workflows</SelectItem>
+                      {workflows.map((w) => <SelectItem key={w.id} value={w.id}>{w.name}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                  <Select value={facultyFilter} onValueChange={(v) => { setFacultyFilter(v); setDepartmentFilter("all"); }}>
+                    <SelectTrigger className="h-9"><SelectValue placeholder="Faculty" /></SelectTrigger>
+                    <SelectContent className="bg-popover">
+                      <SelectItem value="all">All faculties</SelectItem>
+                      {UFH_FACULTY_NAMES.map((f) => <SelectItem key={f} value={f}>{f}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                  <Select value={departmentFilter} onValueChange={setDepartmentFilter}>
+                    <SelectTrigger className="h-9"><SelectValue placeholder="Department" /></SelectTrigger>
+                    <SelectContent className="bg-popover">
+                      <SelectItem value="all">All departments</SelectItem>
+                      {departmentOptions.map((d) => <SelectItem key={d} value={d}>{d}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                  <div className="flex flex-col">
+                    <Label className="text-[10px] text-muted-foreground mb-1">From</Label>
+                    <Input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className="h-9" />
+                  </div>
+                  <div className="flex flex-col">
+                    <Label className="text-[10px] text-muted-foreground mb-1">To</Label>
+                    <Input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className="h-9" />
+                  </div>
+                  {filtersActive && (
+                    <Button variant="ghost" size="sm" className="h-9" onClick={() => {
+                      setSearch(""); setStatusFilter("all"); setWorkflowFilter("all");
+                      setFacultyFilter("all"); setDepartmentFilter("all");
+                      setDateFrom(""); setDateTo("");
+                    }}>Clear</Button>
+                  )}
+                </div>
               </CardContent>
             </Card>
 
