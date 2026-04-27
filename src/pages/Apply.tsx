@@ -13,6 +13,8 @@ import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { useDebouncedCallback } from "@/hooks/useDebounce";
 import { Check, ChevronLeft, ChevronRight, Loader2, Send, Upload, FileText, Trash2 } from "lucide-react";
+import { MessageThread } from "@/components/MessageThread";
+import { Download } from "lucide-react";
 
 const Apply = () => {
   const { slug } = useParams();
@@ -341,8 +343,48 @@ const Apply = () => {
             </Button>
           )}
         </div>
+
+        {submitted && application && user && (
+          <Card className="mt-6">
+            <CardHeader className="flex flex-row items-center justify-between">
+              <CardTitle className="text-lg">Messages with reviewers</CardTitle>
+              {application.status === "approved" && (
+                <DownloadPackButton applicationId={application.id} />
+              )}
+            </CardHeader>
+            <CardContent>
+              <MessageThread applicationId={application.id} applicantId={user.id} />
+            </CardContent>
+          </Card>
+        )}
       </main>
     </div>
+  );
+};
+
+const DownloadPackButton = ({ applicationId }: { applicationId: string }) => {
+  const [loading, setLoading] = useState(false);
+  const handle = async () => {
+    setLoading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("generate-application-pdf", {
+        body: { applicationId },
+      });
+      if (error) throw error;
+      const url = (data as any)?.url;
+      if (url) window.open(url, "_blank");
+      else toast.error("Could not generate PDF pack");
+    } catch (e: any) {
+      toast.error(e?.message ?? "Failed to generate PDF");
+    } finally {
+      setLoading(false);
+    }
+  };
+  return (
+    <Button size="sm" variant="outline" onClick={handle} disabled={loading}>
+      {loading ? <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" /> : <Download className="w-3.5 h-3.5 mr-1" />}
+      Download pack
+    </Button>
   );
 };
 
