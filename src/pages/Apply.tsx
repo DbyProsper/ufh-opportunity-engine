@@ -106,10 +106,13 @@ const Apply = () => {
     setResponses(next);
     debouncedSave(next);
 
-    // also push to profile if mapped
+    // Back-fill profile if this field maps to a profile attribute and the profile is empty for it
     const f = fields.find((x) => x.id === fieldId);
-    if (f?.profile_field && user) {
-      supabase.from("profiles").update({ [f.profile_field]: value } as never).eq("id", user.id).then(() => setProfile((p: any) => ({ ...p, [f.profile_field]: value })));
+    if (f?.profile_field && user && value && value.trim()) {
+      const existing = profile?.[f.profile_field];
+      if (!existing || String(existing).trim() === "") {
+        supabase.from("profiles").update({ [f.profile_field]: value } as never).eq("id", user.id).then(() => setProfile((p: any) => ({ ...p, [f.profile_field]: value })));
+      }
     }
   };
 
