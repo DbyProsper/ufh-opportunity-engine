@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
-import { Calendar, Check, Clock, Download, Eye, FileText, Loader2, Mail, MessageSquare, Phone, User, X } from "lucide-react";
+import { Calendar, Check, Clock, Eye, FileText, Loader2, Mail, MessageSquare, Phone, User, X } from "lucide-react";
 import { MessageThread } from "@/components/MessageThread";
 import { useAuth } from "@/contexts/AuthContext";
 import { PreviewPackButton } from "@/pages/Apply";
