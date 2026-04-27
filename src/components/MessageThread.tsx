@@ -3,8 +3,9 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Loader2, Send } from "lucide-react";
+import { Loader2, Send, Check, CheckCheck, Zap } from "lucide-react";
 import { toast } from "sonner";
+import { REVIEWER_QUICK_REPLIES } from "@/data/quickReplies";
 
 interface Props {
   applicationId: string;
@@ -24,11 +25,13 @@ interface Message {
 
 export const MessageThread = ({ applicationId, applicantId, className, emptyHint }: Props) => {
   const { user } = useAuth();
+  const isReviewer = !!user && user.id !== applicantId;
   const [threadId, setThreadId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(true);
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
+  const [showQuickReplies, setShowQuickReplies] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   // Load or create thread + initial messages
@@ -75,6 +78,11 @@ export const MessageThread = ({ applicationId, applicantId, className, emptyHint
         "postgres_changes",
         { event: "INSERT", schema: "public", table: "messages", filter: `thread_id=eq.${threadId}` },
         (payload) => setMessages((prev) => [...prev, payload.new as Message])
+      )
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "messages", filter: `thread_id=eq.${threadId}` },
+        (payload) => setMessages((prev) => prev.map((m) => m.id === (payload.new as Message).id ? (payload.new as Message) : m))
       )
       .subscribe();
     return () => { supabase.removeChannel(channel); };
@@ -139,15 +147,46 @@ export const MessageThread = ({ applicationId, applicantId, className, emptyHint
                 }`}
               >
                 <p className="whitespace-pre-wrap break-words">{m.body}</p>
-                <p className={`text-[10px] mt-1 opacity-70 ${mine ? "text-primary-foreground" : "text-muted-foreground"}`}>
-                  {fromApplicant ? "Applicant" : mine ? "You" : "Reviewer"} · {new Date(m.created_at).toLocaleString()}
+                <p className={`text-[10px] mt-1 opacity-70 flex items-center gap-1 ${mine ? "text-primary-foreground justify-end" : "text-muted-foreground"}`}>
+                  <span>{fromApplicant ? "Applicant" : mine ? "You" : "Reviewer"} · {new Date(m.created_at).toLocaleString()}</span>
+                  {mine && (
+                    m.read_at
+                      ? <span title={`Read ${new Date(m.read_at).toLocaleString()}`} className="inline-flex items-center"><CheckCheck className="w-3 h-3" /></span>
+                      : <span title="Sent" className="inline-flex items-center"><Check className="w-3 h-3" /></span>
+                  )}
                 </p>
               </div>
             </div>
           );
         })}
       </div>
+      {isReviewer && showQuickReplies && (
+        <div className="border-t px-3 pt-2 pb-1 flex flex-wrap gap-1.5 bg-muted/30">
+          {REVIEWER_QUICK_REPLIES.map((q) => (
+            <button
+              key={q.label}
+              type="button"
+              onClick={() => { setText((prev) => prev ? prev : q.body); setShowQuickReplies(false); }}
+              className="text-[11px] px-2.5 py-1 rounded-full border bg-background hover:bg-muted transition"
+            >
+              {q.label}
+            </button>
+          ))}
+        </div>
+      )}
       <div className="border-t p-3 flex gap-2 items-end">
+        {isReviewer && (
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            onClick={() => setShowQuickReplies((s) => !s)}
+            title="Quick replies"
+            className="shrink-0"
+          >
+            <Zap className="w-4 h-4" />
+          </Button>
+        )}
         <Textarea
           rows={2}
           value={text}
