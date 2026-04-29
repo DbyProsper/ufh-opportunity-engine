@@ -5,11 +5,13 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Calendar, Check, Clock, Eye, FileText, Loader2, Mail, MessageSquare, Phone, User, X } from "lucide-react";
+import { Calendar, Check, Clock, Eye, FileText, Loader2, Mail, MessageSquare, Phone, RefreshCcw, Stamp, User, UserCheck, X } from "lucide-react";
 import { MessageThread } from "@/components/MessageThread";
 import { useAuth } from "@/contexts/AuthContext";
 import { PreviewPackButton } from "@/pages/Apply";
+import { OfferPanel } from "@/components/OfferPanel";
 
 interface Props {
   applicationId: string;
@@ -29,6 +31,9 @@ export const ApplicationDetail = ({ applicationId, onClose, onStatusChange }: Pr
   const [docs, setDocs] = useState<any[]>([]);
   const [docMeta, setDocMeta] = useState<any[]>([]);
   const [reviewNotes, setReviewNotes] = useState("");
+  const [admins, setAdmins] = useState<any[]>([]);
+  const [reasonOpen, setReasonOpen] = useState<null | "rejected" | "changes_requested">(null);
+  const [reason, setReason] = useState("");
 
   useEffect(() => {
     (async () => {
@@ -49,6 +54,14 @@ export const ApplicationDetail = ({ applicationId, onClose, onStatusChange }: Pr
       const map: Record<string, string> = {};
       (mR.data ?? []).forEach((r: any) => { map[r.field_id] = r.value ?? ""; });
       setResponses(map);
+
+      // Load admin reviewers (everyone with admin role)
+      const { data: adminRoles } = await supabase.from("user_roles").select("user_id").eq("role", "admin");
+      const ids = (adminRoles ?? []).map((r: any) => r.user_id);
+      if (ids.length > 0) {
+        const { data: ap } = await supabase.from("profiles").select("id,full_name,email").in("id", ids);
+        setAdmins(ap ?? []);
+      }
 
       if (wfR.data) {
         const [sR, fR, dmR] = await Promise.all([
@@ -71,20 +84,56 @@ export const ApplicationDetail = ({ applicationId, onClose, onStatusChange }: Pr
   };
 
   const setStatus = async (status: string) => {
-    const { error } = await supabase.from("applications").update({
-      status: status as any, reviewed_at: new Date().toISOString(), review_notes: reviewNotes || null,
-    }).eq("id", applicationId);
+    if (status === "rejected" || status === "changes_requested") {
+      setReasonOpen(status as any); return;
+    }
+    const payload: any = { status, reviewed_at: new Date().toISOString(), review_notes: reviewNotes || null };
+    if (status === "approved") payload.is_editable = false;
+    const { error } = await supabase.from("applications").update(payload).eq("id", applicationId);
     if (error) return toast.error(error.message);
     await supabase.from("notifications").insert({
       user_id: app.user_id,
       title: `Application ${status.replace("_"," ")}`,
       body: `Your ${workflow?.name ?? "application"} status was updated.`,
       link: "/dashboard",
-      type: status === "approved" ? "success" : status === "rejected" ? "error" : "info",
+      type: status === "approved" ? "success" : "info",
     });
     toast.success(`Marked ${status}`);
     onStatusChange(applicationId, status);
     onClose();
+  };
+
+  const submitReason = async () => {
+    if (!reason.trim()) return toast.error("Please add a reason");
+    const status = reasonOpen!;
+    const payload: any = {
+      status,
+      rejection_reason: reason.trim(),
+      reviewed_at: new Date().toISOString(),
+      review_notes: reviewNotes || null,
+    };
+    if (status === "changes_requested") payload.is_editable = true;
+    const { error } = await supabase.from("applications").update(payload).eq("id", applicationId);
+    if (error) return toast.error(error.message);
+    await supabase.from("notifications").insert({
+      user_id: app.user_id,
+      title: status === "rejected" ? "Application rejected" : "Changes requested on your application",
+      body: reason.trim(),
+      link: "/dashboard",
+      type: status === "rejected" ? "error" : "warning",
+    });
+    toast.success(status === "rejected" ? "Rejected" : "Applicant can now edit");
+    onStatusChange(applicationId, status);
+    setReasonOpen(null); setReason("");
+    onClose();
+  };
+
+  const assignReviewer = async (reviewerId: string) => {
+    const value = reviewerId === "none" ? null : reviewerId;
+    const { error } = await supabase.from("applications").update({ reviewer_id: value } as any).eq("id", applicationId);
+    if (error) return toast.error(error.message);
+    setApp((a: any) => ({ ...a, reviewer_id: value }));
+    toast.success(value ? "Reviewer assigned" : "Reviewer cleared");
   };
 
   if (loading) {
@@ -120,6 +169,7 @@ export const ApplicationDetail = ({ applicationId, onClose, onStatusChange }: Pr
             <TabsTrigger value="profile">Applicant</TabsTrigger>
             <TabsTrigger value="docs">Documents ({docs.length})</TabsTrigger>
             <TabsTrigger value="messages"><MessageSquare className="w-3.5 h-3.5 mr-1" /> Messages</TabsTrigger>
+            <TabsTrigger value="offer"><Stamp className="w-3.5 h-3.5 mr-1" /> Offer</TabsTrigger>
             <TabsTrigger value="timeline">Timeline</TabsTrigger>
           </TabsList>
 
@@ -189,6 +239,17 @@ export const ApplicationDetail = ({ applicationId, onClose, onStatusChange }: Pr
             )}
           </TabsContent>
 
+          <TabsContent value="offer" className="mt-4">
+            {app && (
+              <OfferPanel
+                applicationId={app.id}
+                workflowId={app.workflow_id}
+                applicantId={app.user_id}
+                isAdmin
+              />
+            )}
+          </TabsContent>
+
           <TabsContent value="timeline" className="mt-4">
             <ol className="relative border-l border-border pl-6 space-y-5">
               {timeline.map((t, i) => (
@@ -204,18 +265,46 @@ export const ApplicationDetail = ({ applicationId, onClose, onStatusChange }: Pr
           </TabsContent>
         </Tabs>
 
-        <div className="space-y-2 pt-2 border-t">
-          <p className="text-xs font-medium">Review notes (visible to admins only)</p>
-          <Textarea rows={3} value={reviewNotes} onChange={(e) => setReviewNotes(e.target.value)} placeholder="Add internal notes…" />
+        <div className="space-y-3 pt-2 border-t">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+            <p className="text-xs font-medium flex items-center gap-1 sm:w-40"><UserCheck className="w-3.5 h-3.5" /> Assigned reviewer</p>
+            <Select value={app.reviewer_id ?? "none"} onValueChange={assignReviewer}>
+              <SelectTrigger className="h-9 flex-1"><SelectValue placeholder="Unassigned" /></SelectTrigger>
+              <SelectContent className="bg-popover">
+                <SelectItem value="none">Unassigned</SelectItem>
+                {admins.map((a) => <SelectItem key={a.id} value={a.id}>{a.full_name || a.email}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-2">
+            <p className="text-xs font-medium">Review notes (visible to admins only)</p>
+            <Textarea rows={3} value={reviewNotes} onChange={(e) => setReviewNotes(e.target.value)} placeholder="Add internal notes…" />
+          </div>
         </div>
 
         <DialogFooter className="gap-2 flex-wrap">
           <Button variant="outline" onClick={onClose}>Close</Button>
           <PreviewPackButton applicationId={applicationId} label="PDF pack" />
           <Button variant="outline" onClick={() => setStatus("under_review")}><Eye className="w-3.5 h-3.5 mr-1" /> Under review</Button>
+          <Button variant="outline" onClick={() => setStatus("changes_requested")}><RefreshCcw className="w-3.5 h-3.5 mr-1" /> Allow edits</Button>
           <Button variant="outline" className="text-destructive" onClick={() => setStatus("rejected")}><X className="w-3.5 h-3.5 mr-1" /> Reject</Button>
           <Button className="btn-gradient-primary text-primary-foreground" onClick={() => setStatus("approved")}><Check className="w-3.5 h-3.5 mr-1" /> Approve</Button>
         </DialogFooter>
+
+        <Dialog open={reasonOpen !== null} onOpenChange={(o) => !o && setReasonOpen(null)}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>{reasonOpen === "rejected" ? "Reason for rejection" : "What should the applicant fix?"}</DialogTitle>
+            </DialogHeader>
+            <Textarea rows={5} value={reason} onChange={(e) => setReason(e.target.value)} placeholder={reasonOpen === "rejected" ? "Explain why this application is being rejected." : "Tell the applicant exactly what to update so they can resubmit."} />
+            <DialogFooter>
+              <Button variant="outline" onClick={() => { setReasonOpen(null); setReason(""); }}>Cancel</Button>
+              <Button onClick={submitReason} className={reasonOpen === "rejected" ? "bg-destructive text-destructive-foreground hover:bg-destructive/90" : "btn-gradient-primary text-primary-foreground"}>
+                {reasonOpen === "rejected" ? "Reject" : "Send back for edits"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </DialogContent>
     </Dialog>
   );
