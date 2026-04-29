@@ -100,6 +100,7 @@ export type Database = {
           created_at: string
           id: string
           is_editable: boolean
+          rejection_reason: string | null
           review_notes: string | null
           reviewed_at: string | null
           reviewer_id: string | null
@@ -113,6 +114,7 @@ export type Database = {
           created_at?: string
           id?: string
           is_editable?: boolean
+          rejection_reason?: string | null
           review_notes?: string | null
           reviewed_at?: string | null
           reviewer_id?: string | null
@@ -126,6 +128,7 @@ export type Database = {
           created_at?: string
           id?: string
           is_editable?: boolean
+          rejection_reason?: string | null
           review_notes?: string | null
           reviewed_at?: string | null
           reviewer_id?: string | null
@@ -269,35 +272,97 @@ export type Database = {
         }
         Relationships: []
       }
+      offer_documents: {
+        Row: {
+          created_at: string
+          file_name: string
+          file_path: string
+          id: string
+          kind: string
+          notes: string | null
+          offer_id: string
+          uploaded_by: string
+          version: number
+        }
+        Insert: {
+          created_at?: string
+          file_name: string
+          file_path: string
+          id?: string
+          kind: string
+          notes?: string | null
+          offer_id: string
+          uploaded_by: string
+          version?: number
+        }
+        Update: {
+          created_at?: string
+          file_name?: string
+          file_path?: string
+          id?: string
+          kind?: string
+          notes?: string | null
+          offer_id?: string
+          uploaded_by?: string
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "offer_documents_offer_id_fkey"
+            columns: ["offer_id"]
+            isOneToOne: false
+            referencedRelation: "offers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       offers: {
         Row: {
           application_id: string
           created_at: string
+          current_version: number
           id: string
           message: string | null
+          rejection_reason: string | null
           responded_at: string | null
+          reviewer_id: string | null
           sent_at: string | null
           status: Database["public"]["Enums"]["offer_status"]
+          template_id: string | null
+          template_name: string | null
+          template_path: string | null
           withdrawn_at: string | null
         }
         Insert: {
           application_id: string
           created_at?: string
+          current_version?: number
           id?: string
           message?: string | null
+          rejection_reason?: string | null
           responded_at?: string | null
+          reviewer_id?: string | null
           sent_at?: string | null
           status?: Database["public"]["Enums"]["offer_status"]
+          template_id?: string | null
+          template_name?: string | null
+          template_path?: string | null
           withdrawn_at?: string | null
         }
         Update: {
           application_id?: string
           created_at?: string
+          current_version?: number
           id?: string
           message?: string | null
+          rejection_reason?: string | null
           responded_at?: string | null
+          reviewer_id?: string | null
           sent_at?: string | null
           status?: Database["public"]["Enums"]["offer_status"]
+          template_id?: string | null
+          template_name?: string | null
+          template_path?: string | null
           withdrawn_at?: string | null
         }
         Relationships: [
@@ -525,6 +590,39 @@ export type Database = {
           },
         ]
       }
+      workflow_offer_templates: {
+        Row: {
+          created_at: string
+          description: string | null
+          file_name: string
+          file_path: string
+          id: string
+          name: string
+          uploaded_by: string | null
+          workflow_id: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          file_name: string
+          file_path: string
+          id?: string
+          name: string
+          uploaded_by?: string | null
+          workflow_id: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          file_name?: string
+          file_path?: string
+          id?: string
+          name?: string
+          uploaded_by?: string | null
+          workflow_id?: string
+        }
+        Relationships: []
+      }
       workflow_steps: {
         Row: {
           created_at: string
@@ -634,6 +732,7 @@ export type Database = {
         | "approved"
         | "rejected"
         | "withdrawn"
+        | "changes_requested"
       field_type:
         | "text"
         | "textarea"
@@ -644,7 +743,17 @@ export type Database = {
         | "number"
         | "email"
         | "phone"
-      offer_status: "pending" | "sent" | "accepted" | "declined" | "withdrawn"
+      offer_status:
+        | "pending"
+        | "sent"
+        | "accepted"
+        | "declined"
+        | "withdrawn"
+        | "template_sent"
+        | "signed_uploaded"
+        | "revision_requested"
+        | "approved"
+        | "rejected"
       target_role: "student" | "staff" | "any"
     }
     CompositeTypes: {
@@ -781,6 +890,7 @@ export const Constants = {
         "approved",
         "rejected",
         "withdrawn",
+        "changes_requested",
       ],
       field_type: [
         "text",
@@ -793,7 +903,18 @@ export const Constants = {
         "email",
         "phone",
       ],
-      offer_status: ["pending", "sent", "accepted", "declined", "withdrawn"],
+      offer_status: [
+        "pending",
+        "sent",
+        "accepted",
+        "declined",
+        "withdrawn",
+        "template_sent",
+        "signed_uploaded",
+        "revision_requested",
+        "approved",
+        "rejected",
+      ],
       target_role: ["student", "staff", "any"],
     },
   },
