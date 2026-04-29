@@ -77,11 +77,14 @@ export const NotificationBell = () => {
       <PopoverContent align="end" className="w-80 p-0 bg-popover">
         <div className="flex items-center justify-between p-3 border-b">
           <h4 className="font-semibold text-sm">Notifications</h4>
-          {unread > 0 && (
-            <button onClick={markAllRead} className="text-xs text-primary hover:underline">
-              Mark all read
-            </button>
-          )}
+          <div className="flex items-center gap-3">
+            {unread > 0 && (
+              <button onClick={markAllRead} className="text-xs text-primary hover:underline">
+                Mark all read
+              </button>
+            )}
+            <Link to="/notifications" className="text-xs text-primary hover:underline">View all</Link>
+          </div>
         </div>
         <div className="max-h-96 overflow-y-auto">
           {items.length === 0 ? (
