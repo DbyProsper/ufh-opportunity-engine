@@ -9,7 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Loader2, Save, Upload, FileText, Sparkles, Trash2, Eye } from "lucide-react";
+import { Loader2, Save, Upload, FileText, Sparkles, Trash2, Eye, RefreshCcw } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { UFH_FACULTIES, UFH_FACULTY_NAMES } from "@/data/ufh";
 
@@ -39,6 +39,7 @@ const Profile = () => {
   const [cvUploading, setCvUploading] = useState(false);
   const [cvParsing, setCvParsing] = useState(false);
   const [profileDocs, setProfileDocs] = useState<any[]>([]);
+  const [syncing, setSyncing] = useState(false);
 
   useEffect(() => {
     if (!authLoading && !user) navigate("/auth");
@@ -147,6 +148,55 @@ const Profile = () => {
     if (error) return toast.error(error.message);
     setProfileDocs((p) => p.filter((d) => d.id !== id));
     toast.success("Removed from profile library.");
+  };
+
+  const syncFromApplications = async () => {
+    if (!user) return;
+    setSyncing(true);
+    try {
+      // Pull every doc the user has uploaded across applications, with the workflow doc label
+      const { data: appRows } = await supabase
+        .from("applications").select("id").eq("user_id", user.id);
+      const appIds = (appRows ?? []).map((a) => a.id);
+      if (appIds.length === 0) { toast.info("No applications yet to sync from."); setSyncing(false); return; }
+      const { data: appDocs } = await supabase
+        .from("application_documents").select("*").in("application_id", appIds);
+      const docIds = Array.from(new Set((appDocs ?? []).map((d: any) => d.document_id).filter(Boolean)));
+      let labels: Record<string, string> = {};
+      if (docIds.length > 0) {
+        const { data: meta } = await supabase
+          .from("workflow_documents").select("id,name").in("id", docIds as string[]);
+        labels = Object.fromEntries((meta ?? []).map((m: any) => [m.id, m.name]));
+      }
+      // Build dedupe map: latest per label
+      const byLabel = new Map<string, any>();
+      (appDocs ?? []).forEach((d: any) => {
+        const label = (d.document_id && labels[d.document_id]) || d.file_name || "Document";
+        const existing = byLabel.get(label);
+        if (!existing || new Date(d.uploaded_at) > new Date(existing.uploaded_at)) {
+          byLabel.set(label, d);
+        }
+      });
+      const rows = Array.from(byLabel.entries()).map(([label, d]) => ({
+        user_id: user.id,
+        label,
+        file_name: d.file_name,
+        file_path: d.file_path,
+        source_application_id: d.application_id,
+      }));
+      if (rows.length === 0) { toast.info("No documents found to sync."); setSyncing(false); return; }
+      const { error } = await supabase
+        .from("profile_documents")
+        .upsert(rows as never, { onConflict: "user_id,label" });
+      if (error) throw error;
+      const { data: pd } = await supabase.from("profile_documents").select("*").eq("user_id", user.id).order("created_at", { ascending: false });
+      setProfileDocs(pd ?? []);
+      toast.success(`Synced ${rows.length} document(s) to your library.`);
+    } catch (e: any) {
+      toast.error(e?.message ?? "Sync failed");
+    } finally {
+      setSyncing(false);
+    }
   };
 
   if (loading) {
@@ -279,8 +329,12 @@ const Profile = () => {
 
         {/* Profile document library — auto-built from past applications */}
         <Card className="mt-6">
-          <CardHeader>
+          <CardHeader className="flex flex-row items-center justify-between gap-2">
             <CardTitle className="text-base">Saved documents</CardTitle>
+            <Button size="sm" variant="outline" onClick={syncFromApplications} disabled={syncing}>
+              {syncing ? <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" /> : <RefreshCcw className="w-3.5 h-3.5 mr-1" />}
+              Sync from applications
+            </Button>
           </CardHeader>
           <CardContent>
             <p className="text-xs text-muted-foreground mb-3">

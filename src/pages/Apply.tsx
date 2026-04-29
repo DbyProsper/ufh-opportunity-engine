@@ -16,6 +16,8 @@ import { Check, ChevronLeft, ChevronRight, Loader2, Send, Upload, FileText, Tras
 import { MessageThread } from "@/components/MessageThread";
 import { Download } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { OfferPanel } from "@/components/OfferPanel";
+import { Sparkles, AlertCircle } from "lucide-react";
 
 const Apply = () => {
   const { slug } = useParams();
@@ -33,6 +35,7 @@ const Apply = () => {
   const [stepIndex, setStepIndex] = useState(0);
   const [savingStatus, setSavingStatus] = useState<"idle" | "saving" | "saved">("idle");
   const [submitting, setSubmitting] = useState(false);
+  const [usingCv, setUsingCv] = useState<string | null>(null);
 
   useEffect(() => { if (!authLoading && !user) navigate("/auth"); }, [authLoading, user, navigate]);
 
@@ -140,6 +143,29 @@ const Apply = () => {
     toast.success(`Uploaded ${file.name}`);
   };
 
+  const useCvForDoc = async (docId: string) => {
+    if (!user || !application || !profile?.cv_path) return;
+    setUsingCv(docId);
+    try {
+      // Download CV from user-cvs, then upload as application document
+      const { data: blob, error } = await supabase.storage.from("user-cvs").download(profile.cv_path);
+      if (error || !blob) throw error ?? new Error("Could not load CV");
+      const ext = profile.cv_path.split(".").pop() || "pdf";
+      const path = `${user.id}/${application.id}/${docId}-cv-${Date.now()}.${ext}`;
+      const { error: upErr } = await supabase.storage.from("application-documents").upload(path, blob);
+      if (upErr) throw upErr;
+      const { data: inserted } = await supabase.from("application_documents").insert({
+        application_id: application.id, document_id: docId, file_path: path, file_name: `CV.${ext}`,
+      }).select().single();
+      if (inserted) setUploadedDocs((p) => [...p, inserted]);
+      toast.success("Used your saved CV");
+    } catch (e: any) {
+      toast.error(e?.message ?? "Could not attach CV");
+    } finally {
+      setUsingCv(null);
+    }
+  };
+
   const removeDoc = async (docRow: any) => {
     await supabase.storage.from("application-documents").remove([docRow.file_path]);
     await supabase.from("application_documents").delete().eq("id", docRow.id);
@@ -198,7 +224,8 @@ const Apply = () => {
     return <div className="min-h-screen bg-background"><AppHeader /><div className="container mx-auto py-12 text-center"><p>Workflow not found.</p></div></div>;
   }
 
-  const submitted = application?.status !== "draft";
+  const submitted = application?.status !== "draft" && application?.status !== "changes_requested";
+  const editable = application?.status === "draft" || application?.status === "changes_requested";
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
@@ -214,6 +241,21 @@ const Apply = () => {
             <CardContent className="p-4 flex items-center gap-3">
               <Check className="w-5 h-5 text-success" />
               <p className="text-sm">Submitted — currently <strong>{application.status.replace("_"," ")}</strong>.</p>
+            </CardContent>
+          </Card>
+        )}
+
+        {(application?.status === "rejected" || application?.status === "changes_requested") && application?.rejection_reason && (
+          <Card className={`mb-4 ${application.status === "rejected" ? "border-destructive/30 bg-destructive/5" : "border-warning/30 bg-warning/5"}`}>
+            <CardContent className="p-4 flex items-start gap-3">
+              <AlertCircle className={`w-5 h-5 mt-0.5 ${application.status === "rejected" ? "text-destructive" : "text-warning"}`} />
+              <div>
+                <p className="text-sm font-semibold">{application.status === "rejected" ? "Application rejected" : "Changes requested by reviewer"}</p>
+                <p className="text-sm text-muted-foreground whitespace-pre-wrap">{application.rejection_reason}</p>
+                {application.status === "changes_requested" && (
+                  <p className="text-xs mt-1.5">Update your answers below and resubmit.</p>
+                )}
+              </div>
             </CardContent>
           </Card>
         )}
@@ -308,7 +350,7 @@ const Apply = () => {
                               </p>
                               {d.description && <p className="text-xs text-muted-foreground mt-1">{d.description}</p>}
                             </div>
-                            {!submitted && (
+                            {editable && (
                               <label className="cursor-pointer">
                                 <input type="file" className="hidden" onChange={(e) => e.target.files?.[0] && handleFileUpload(d.id, e.target.files[0])} />
                                 <span className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md border bg-background hover:bg-muted">
@@ -317,12 +359,19 @@ const Apply = () => {
                               </label>
                             )}
                           </div>
+                          {/* CV quick-attach if doc looks like a CV/resume */}
+                          {editable && profile?.cv_path && /\b(cv|resume|curriculum)\b/i.test(d.name || "") && uploaded.length === 0 && (
+                            <Button size="sm" variant="outline" className="mt-2" onClick={() => useCvForDoc(d.id)} disabled={usingCv === d.id}>
+                              {usingCv === d.id ? <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" /> : <Sparkles className="w-3.5 h-3.5 mr-1 text-accent" />}
+                              Use my saved CV
+                            </Button>
+                          )}
                           {uploaded.length > 0 && (
                             <ul className="mt-2 space-y-1">
                               {uploaded.map((u) => (
                                 <li key={u.id} className="flex items-center justify-between text-xs bg-muted/40 rounded px-2 py-1">
                                   <span className="flex items-center gap-1.5"><FileText className="w-3 h-3" /> {u.file_name}</span>
-                                  {!submitted && (
+                                  {editable && (
                                     <button onClick={() => removeDoc(u)} className="text-destructive"><Trash2 className="w-3 h-3" /></button>
                                   )}
                                 </li>
@@ -335,11 +384,11 @@ const Apply = () => {
                   </div>
                 </div>
 
-                {!submitted && (
+                {editable && (
                   <div className="pt-4 border-t">
                     <Button onClick={submit} disabled={submitting} size="lg" className="w-full btn-gradient-primary text-primary-foreground">
                       {submitting ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Send className="w-4 h-4 mr-2" />}
-                      Submit Application
+                      {application?.status === "changes_requested" ? "Resubmit Application" : "Submit Application"}
                     </Button>
                   </div>
                 )}
@@ -360,17 +409,24 @@ const Apply = () => {
         </div>
 
         {submitted && application && user && (
-          <Card className="mt-6">
-            <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle className="text-lg">Messages with reviewers</CardTitle>
-              {application.status === "approved" && (
-                <PreviewPackButton applicationId={application.id} />
-              )}
-            </CardHeader>
-            <CardContent>
-              <MessageThread applicationId={application.id} applicantId={user.id} />
-            </CardContent>
-          </Card>
+          <>
+            {application.status === "approved" && (
+              <div className="mt-6">
+                <OfferPanel applicationId={application.id} workflowId={workflow.id} applicantId={user.id} isAdmin={false} />
+              </div>
+            )}
+            <Card className="mt-6">
+              <CardHeader className="flex flex-row items-center justify-between">
+                <CardTitle className="text-lg">Messages with reviewers</CardTitle>
+                {application.status === "approved" && (
+                  <PreviewPackButton applicationId={application.id} />
+                )}
+              </CardHeader>
+              <CardContent>
+                <MessageThread applicationId={application.id} applicantId={user.id} />
+              </CardContent>
+            </Card>
+          </>
         )}
       </main>
     </div>

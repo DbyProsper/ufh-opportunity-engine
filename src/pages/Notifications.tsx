@@ -1,0 +1,196 @@
+import { useEffect, useMemo, useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import { AppHeader } from "@/components/AppHeader";
+import { useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/integrations/supabase/client";
+import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Loader2, Bell, MessageSquare, Inbox, CheckCheck } from "lucide-react";
+import { formatDistanceToNow } from "date-fns";
+
+interface Notif {
+  id: string;
+  title: string;
+  body: string | null;
+  link: string | null;
+  type: string;
+  read_at: string | null;
+  created_at: string;
+  user_id: string;
+}
+
+const Notifications = () => {
+  const { user, loading: authLoading } = useAuth();
+  const navigate = useNavigate();
+  const [items, setItems] = useState<Notif[]>([]);
+  const [threads, setThreads] = useState<any[]>([]);
+  const [apps, setApps] = useState<any[]>([]);
+  const [workflows, setWorkflows] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => { if (!authLoading && !user) navigate("/auth"); }, [authLoading, user, navigate]);
+
+  useEffect(() => {
+    if (!user) return;
+    (async () => {
+      const [nR, tR, aR, wR] = await Promise.all([
+        supabase.from("notifications").select("*").eq("user_id", user.id).order("created_at", { ascending: false }).limit(200),
+        supabase.from("message_threads").select("*"),
+        supabase.from("applications").select("id,workflow_id,user_id"),
+        supabase.from("workflows").select("id,name"),
+      ]);
+      setItems((nR.data as Notif[]) ?? []);
+      setThreads(tR.data ?? []);
+      setApps(aR.data ?? []);
+      setWorkflows(wR.data ?? []);
+      setLoading(false);
+    })();
+
+    const channel = supabase
+      .channel(`notif-page-${user.id}`)
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "notifications", filter: `user_id=eq.${user.id}` },
+        (p) => setItems((prev) => [p.new as Notif, ...prev])
+      )
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [user]);
+
+  const grouped = useMemo(() => {
+    // Group message-style notifications by workflow → thread; everything else into "Other"
+    const messageItems = items.filter((n) => /message/i.test(n.title));
+    const otherItems = items.filter((n) => !/message/i.test(n.title));
+
+    // For applicants: every thread maps to one of their applications → workflow
+    // For admins: messages don't carry application id, so we keep them under "Reviewer messages"
+    const byWorkflow = new Map<string, { name: string; items: Notif[] }>();
+    messageItems.forEach((n) => {
+      // Heuristic: pull workflow from /apply/:slug or fall back to "Reviewer inbox"
+      const wfMatch = n.body?.match(/about your ([^.]+?)\./i) || n.body?.match(/on a ([^ ]+) thread/i);
+      const key = wfMatch ? wfMatch[1].trim() : "Reviewer messages";
+      if (!byWorkflow.has(key)) byWorkflow.set(key, { name: key, items: [] });
+      byWorkflow.get(key)!.items.push(n);
+    });
+
+    return { byWorkflow: Array.from(byWorkflow.values()), other: otherItems };
+  }, [items, threads, apps, workflows]);
+
+  const unreadCount = items.filter((n) => !n.read_at).length;
+
+  const markAllRead = async () => {
+    if (!user) return;
+    await supabase.from("notifications").update({ read_at: new Date().toISOString() }).eq("user_id", user.id).is("read_at", null);
+    setItems((prev) => prev.map((n) => ({ ...n, read_at: n.read_at ?? new Date().toISOString() })));
+  };
+
+  const markOne = async (id: string) => {
+    await supabase.from("notifications").update({ read_at: new Date().toISOString() }).eq("id", id);
+    setItems((prev) => prev.map((n) => n.id === id ? { ...n, read_at: n.read_at ?? new Date().toISOString() } : n));
+  };
+
+  if (loading) {
+    return <div className="min-h-screen bg-background"><AppHeader /><div className="container py-12 text-center"><Loader2 className="w-6 h-6 animate-spin mx-auto" /></div></div>;
+  }
+
+  return (
+    <div className="min-h-screen bg-background flex flex-col">
+      <AppHeader />
+      <main className="container mx-auto px-4 py-6 md:py-8 flex-1 max-w-3xl w-full">
+        <div className="flex items-center justify-between mb-6 gap-3 flex-wrap">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
+              <Bell className="w-5 h-5 text-primary" />
+            </div>
+            <div>
+              <h1 className="text-2xl font-bold">Notifications</h1>
+              <p className="text-sm text-muted-foreground">{unreadCount} unread</p>
+            </div>
+          </div>
+          {unreadCount > 0 && (
+            <Button variant="outline" size="sm" onClick={markAllRead}>
+              <CheckCheck className="w-3.5 h-3.5 mr-1" /> Mark all read
+            </Button>
+          )}
+        </div>
+
+        {/* Message groups */}
+        {grouped.byWorkflow.length > 0 && (
+          <section className="mb-8">
+            <h2 className="font-semibold mb-3 flex items-center gap-2 text-sm uppercase tracking-wide text-muted-foreground">
+              <MessageSquare className="w-4 h-4" /> Message threads
+            </h2>
+            <div className="space-y-3">
+              {grouped.byWorkflow.map((g) => {
+                const unread = g.items.filter((i) => !i.read_at).length;
+                return (
+                  <Card key={g.name}>
+                    <CardContent className="p-4">
+                      <div className="flex items-center justify-between gap-2 mb-2">
+                        <h3 className="font-semibold text-sm">{g.name}</h3>
+                        {unread > 0 && <Badge className="bg-accent text-accent-foreground">{unread} unread</Badge>}
+                      </div>
+                      <ul className="space-y-1.5">
+                        {g.items.slice(0, 5).map((n) => (
+                          <li key={n.id}>
+                            <button
+                              onClick={() => { markOne(n.id); if (n.link) navigate(n.link); }}
+                              className={`w-full text-left text-sm p-2 rounded hover:bg-muted/60 transition flex items-start gap-2 ${!n.read_at ? "bg-primary/5" : ""}`}
+                            >
+                              <span className={`mt-1.5 w-1.5 h-1.5 rounded-full shrink-0 ${!n.read_at ? "bg-primary" : "bg-transparent"}`} />
+                              <div className="min-w-0 flex-1">
+                                <p className="font-medium truncate">{n.title}</p>
+                                {n.body && <p className="text-xs text-muted-foreground line-clamp-2">{n.body}</p>}
+                                <p className="text-[10px] text-muted-foreground mt-0.5">{formatDistanceToNow(new Date(n.created_at), { addSuffix: true })}</p>
+                              </div>
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
+          </section>
+        )}
+
+        {/* Everything else */}
+        <section>
+          <h2 className="font-semibold mb-3 flex items-center gap-2 text-sm uppercase tracking-wide text-muted-foreground">
+            <Inbox className="w-4 h-4" /> Updates
+          </h2>
+          {grouped.other.length === 0 ? (
+            <Card><CardContent className="p-8 text-center text-sm text-muted-foreground">No notifications.</CardContent></Card>
+          ) : (
+            <div className="space-y-2">
+              {grouped.other.map((n) => {
+                const tone = n.type === "success" ? "border-success/30 bg-success/5"
+                          : n.type === "error" ? "border-destructive/30 bg-destructive/5"
+                          : n.type === "warning" ? "border-warning/30 bg-warning/5"
+                          : "border-border";
+                const content = (
+                  <div className={`p-3 border rounded-lg ${tone} ${!n.read_at ? "ring-1 ring-primary/20" : ""}`}>
+                    <div className="flex items-start justify-between gap-2">
+                      <p className="text-sm font-medium">{n.title}</p>
+                      <p className="text-[10px] text-muted-foreground shrink-0">{formatDistanceToNow(new Date(n.created_at), { addSuffix: true })}</p>
+                    </div>
+                    {n.body && <p className="text-xs text-muted-foreground mt-1 whitespace-pre-wrap">{n.body}</p>}
+                  </div>
+                );
+                return (
+                  <button key={n.id} onClick={() => markOne(n.id)} className="w-full text-left">
+                    {n.link ? <Link to={n.link} onClick={() => markOne(n.id)}>{content}</Link> : content}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </section>
+      </main>
+    </div>
+  );
+};
+
+export default Notifications;

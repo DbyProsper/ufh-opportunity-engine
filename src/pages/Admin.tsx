@@ -14,9 +14,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import { rankApplicants } from "@/lib/eligibility";
-import { Loader2, Plus, Sparkles, Eye, Check, X, ShieldAlert, Search, Settings2, Users, GraduationCap } from "lucide-react";
+import { Loader2, Plus, Sparkles, Eye, Check, X, ShieldAlert, Search, Settings2, Users, GraduationCap, Stamp, UserCheck } from "lucide-react";
 import { WorkflowEditor } from "@/components/admin/WorkflowEditor";
 import { ApplicationDetail } from "@/components/admin/ApplicationDetail";
+import { OfferTemplateManager } from "@/components/admin/OfferTemplateManager";
 import { UFH_FACULTIES, UFH_FACULTY_NAMES } from "@/data/ufh";
 
 const Admin = () => {
@@ -31,6 +32,8 @@ const Admin = () => {
   const [newWf, setNewWf] = useState({ name: "", slug: "", description: "" });
   const [editingWf, setEditingWf] = useState<string | null>(null);
   const [viewingApp, setViewingApp] = useState<string | null>(null);
+  const [templatesFor, setTemplatesFor] = useState<{ id: string; name: string } | null>(null);
+  const [admins, setAdmins] = useState<any[]>([]);
 
   // filters
   const [audienceTab, setAudienceTab] = useState<"all" | "student" | "staff">("all");
@@ -38,6 +41,7 @@ const Admin = () => {
   const [workflowFilter, setWorkflowFilter] = useState<string>("all");
   const [facultyFilter, setFacultyFilter] = useState<string>("all");
   const [departmentFilter, setDepartmentFilter] = useState<string>("all");
+  const [reviewerFilter, setReviewerFilter] = useState<string>("all");
   const [dateFrom, setDateFrom] = useState<string>("");
   const [dateTo, setDateTo] = useState<string>("");
   const [search, setSearch] = useState("");
@@ -57,29 +61,35 @@ const Admin = () => {
       setWorkflows(wfRes.data ?? []);
       setApplications(appsRes.data ?? []);
       setProfiles(profRes.data ?? []);
+      const { data: ar } = await supabase.from("user_roles").select("user_id").eq("role", "admin");
+      const ids = (ar ?? []).map((r: any) => r.user_id);
+      if (ids.length) {
+        const { data: ap } = await supabase.from("profiles").select("id,full_name,email").in("id", ids);
+        setAdmins(ap ?? []);
+      }
       setLoading(false);
     })();
   }, [user]);
 
-  const updateAppStatus = async (appId: string, status: string) => {
+  const quickApprove = async (appId: string) => {
     const { error } = await supabase.from("applications").update({
-      status: status as any,
+      status: "approved" as any,
       reviewed_at: new Date().toISOString(),
-      reviewer_id: user!.id,
-    }).eq("id", appId);
-    if (error) { toast.error(error.message); return; }
-    setApplications((p) => p.map((a) => a.id === appId ? { ...a, status } : a));
+      is_editable: false,
+    } as any).eq("id", appId);
+    if (error) return toast.error(error.message);
+    setApplications((p) => p.map((a) => a.id === appId ? { ...a, status: "approved" } : a));
     const app = applications.find((a) => a.id === appId);
     if (app) {
       await supabase.from("notifications").insert({
         user_id: app.user_id,
-        title: `Application ${status}`,
-        body: `Your application status was updated to ${status.replace("_", " ")}.`,
+        title: "Application approved",
+        body: "Your application has been approved.",
         link: "/dashboard",
-        type: status === "approved" ? "success" : status === "rejected" ? "error" : "info",
+        type: "success",
       });
     }
-    toast.success(`Marked as ${status}`);
+    toast.success("Approved");
   };
 
   const createWorkflow = async (e: React.FormEvent) => {
@@ -108,6 +118,9 @@ const Admin = () => {
       const prof = profiles.find((p) => p.id === a.user_id);
       if (facultyFilter !== "all" && prof?.faculty !== facultyFilter) return false;
       if (departmentFilter !== "all" && prof?.department !== departmentFilter) return false;
+      if (reviewerFilter !== "all") {
+        if (reviewerFilter === "unassigned" ? !!a.reviewer_id : a.reviewer_id !== reviewerFilter) return false;
+      }
       if (dateFrom) {
         const ref = a.submitted_at || a.created_at;
         if (!ref || new Date(ref) < new Date(dateFrom)) return false;
@@ -124,13 +137,13 @@ const Admin = () => {
       }
       return true;
     });
-  }, [applications, workflows, profiles, audienceTab, statusFilter, workflowFilter, facultyFilter, departmentFilter, dateFrom, dateTo, search]);
+  }, [applications, workflows, profiles, audienceTab, statusFilter, workflowFilter, facultyFilter, departmentFilter, reviewerFilter, dateFrom, dateTo, search]);
 
   const departmentOptions = facultyFilter === "all"
     ? Array.from(new Set(Object.values(UFH_FACULTIES).flat()))
     : (UFH_FACULTIES[facultyFilter] ?? []);
 
-  const filtersActive = !!(search || statusFilter !== "all" || workflowFilter !== "all" || facultyFilter !== "all" || departmentFilter !== "all" || dateFrom || dateTo);
+  const filtersActive = !!(search || statusFilter !== "all" || workflowFilter !== "all" || facultyFilter !== "all" || departmentFilter !== "all" || reviewerFilter !== "all" || dateFrom || dateTo);
 
   const studentCount = applications.filter((a) => {
     const wf = workflows.find((w) => w.id === a.workflow_id);
@@ -202,6 +215,7 @@ const Admin = () => {
                       <SelectItem value="draft">Draft</SelectItem>
                       <SelectItem value="submitted">Submitted</SelectItem>
                       <SelectItem value="under_review">Under review</SelectItem>
+                      <SelectItem value="changes_requested">Changes requested</SelectItem>
                       <SelectItem value="approved">Approved</SelectItem>
                       <SelectItem value="rejected">Rejected</SelectItem>
                       <SelectItem value="withdrawn">Withdrawn</SelectItem>
@@ -226,6 +240,14 @@ const Admin = () => {
                     <SelectContent className="bg-popover">
                       <SelectItem value="all">All departments</SelectItem>
                       {departmentOptions.map((d) => <SelectItem key={d} value={d}>{d}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                  <Select value={reviewerFilter} onValueChange={setReviewerFilter}>
+                    <SelectTrigger className="h-9"><SelectValue placeholder="Reviewer" /></SelectTrigger>
+                    <SelectContent className="bg-popover">
+                      <SelectItem value="all">All reviewers</SelectItem>
+                      <SelectItem value="unassigned">Unassigned</SelectItem>
+                      {admins.map((a) => <SelectItem key={a.id} value={a.id}>{a.full_name || a.email}</SelectItem>)}
                     </SelectContent>
                   </Select>
                   <div className="flex flex-col">
@@ -259,29 +281,44 @@ const Admin = () => {
                   <p className="text-muted-foreground text-center py-8">No applications match these filters.</p>
                 ) : (
                   <div className="space-y-3">
-                    {filteredApps.map((a) => {
-                      const wf = workflows.find((w) => w.id === a.workflow_id);
-                      const prof = profiles.find((p) => p.id === a.user_id);
-                      return (
-                        <div key={a.id} className="flex items-center justify-between p-3 border rounded-lg gap-3 flex-wrap">
-                          <div className="min-w-0 flex-1">
-                            <p className="font-medium text-sm">
-                              {prof?.full_name || prof?.email || "Unknown"}
-                              <span className="text-muted-foreground font-normal"> — {wf?.name}</span>
-                              {wf?.target_role === "staff" && <Badge variant="outline" className="ml-2 text-[10px]">Staff</Badge>}
-                              {wf?.target_role === "student" && <Badge variant="outline" className="ml-2 text-[10px]">Student</Badge>}
-                            </p>
-                            <p className="text-xs text-muted-foreground">{prof?.faculty} · {prof?.department}</p>
-                          </div>
-                          <Badge className={`status-${a.status.replace("_","-")} capitalize`}>{a.status.replace("_"," ")}</Badge>
-                          <div className="flex gap-1.5">
-                            <Button size="sm" variant="outline" onClick={() => setViewingApp(a.id)}><Eye className="w-3.5 h-3.5" /></Button>
-                            <Button size="sm" variant="outline" className="text-success" onClick={() => updateAppStatus(a.id, "approved")}><Check className="w-3.5 h-3.5" /></Button>
-                            <Button size="sm" variant="outline" className="text-destructive" onClick={() => updateAppStatus(a.id, "rejected")}><X className="w-3.5 h-3.5" /></Button>
-                          </div>
-                        </div>
-                      );
-                    })}
+                     {filteredApps.map((a) => {
+                       const wf = workflows.find((w) => w.id === a.workflow_id);
+                       const prof = profiles.find((p) => p.id === a.user_id);
+                       const reviewer = admins.find((x) => x.id === a.reviewer_id);
+                       return (
+                         <div
+                           key={a.id}
+                           role="button"
+                           tabIndex={0}
+                           onClick={() => setViewingApp(a.id)}
+                           onKeyDown={(e) => { if (e.key === "Enter") setViewingApp(a.id); }}
+                           className="flex items-center justify-between p-3 border rounded-lg gap-3 flex-wrap cursor-pointer hover:bg-muted/40 hover:border-primary/40 transition"
+                         >
+                           <div className="min-w-0 flex-1">
+                             <p className="font-medium text-sm">
+                               {prof?.full_name || prof?.email || "Unknown"}
+                               <span className="text-muted-foreground font-normal"> — {wf?.name}</span>
+                               {wf?.target_role === "staff" && <Badge variant="outline" className="ml-2 text-[10px]">Staff</Badge>}
+                               {wf?.target_role === "student" && <Badge variant="outline" className="ml-2 text-[10px]">Student</Badge>}
+                             </p>
+                             <p className="text-xs text-muted-foreground flex items-center gap-2 flex-wrap">
+                               <span>{prof?.faculty} · {prof?.department}</span>
+                               {reviewer ? (
+                                 <span className="inline-flex items-center gap-1 text-primary"><UserCheck className="w-3 h-3" /> {reviewer.full_name || reviewer.email}</span>
+                               ) : (
+                                 <span className="italic">Unassigned</span>
+                               )}
+                             </p>
+                           </div>
+                           <Badge className={`status-${a.status.replace("_","-")} capitalize`}>{a.status.replace("_"," ")}</Badge>
+                           <div className="flex gap-1.5" onClick={(e) => e.stopPropagation()}>
+                             <Button size="sm" variant="outline" onClick={() => setViewingApp(a.id)}><Eye className="w-3.5 h-3.5" /></Button>
+                             <Button size="sm" variant="outline" className="text-success" onClick={() => quickApprove(a.id)}><Check className="w-3.5 h-3.5" /></Button>
+                             <Button size="sm" variant="outline" className="text-destructive" onClick={() => setViewingApp(a.id)} title="Open to add a rejection reason"><X className="w-3.5 h-3.5" /></Button>
+                           </div>
+                         </div>
+                       );
+                     })}
                   </div>
                 )}
               </CardContent>
@@ -328,14 +365,19 @@ const Admin = () => {
                     </div>
                     <p className="text-xs text-muted-foreground line-clamp-2 mb-3">{w.description}</p>
                     <p className="text-xs text-muted-foreground">/{w.slug}</p>
-                    <div className="flex items-center justify-between mt-3">
-                      <p className="text-xs text-muted-foreground">
-                        {applications.filter((a) => a.workflow_id === w.id).length} applications
-                      </p>
-                      <Button size="sm" variant="outline" onClick={() => setEditingWf(w.id)}>
-                        <Settings2 className="w-3.5 h-3.5 mr-1" /> Edit
-                      </Button>
-                    </div>
+                     <div className="flex items-center justify-between mt-3 flex-wrap gap-2">
+                       <p className="text-xs text-muted-foreground">
+                         {applications.filter((a) => a.workflow_id === w.id).length} applications
+                       </p>
+                       <div className="flex gap-1.5">
+                         <Button size="sm" variant="outline" onClick={() => setTemplatesFor({ id: w.id, name: w.name })}>
+                           <Stamp className="w-3.5 h-3.5 mr-1" /> Offer templates
+                         </Button>
+                         <Button size="sm" variant="outline" onClick={() => setEditingWf(w.id)}>
+                           <Settings2 className="w-3.5 h-3.5 mr-1" /> Edit
+                         </Button>
+                       </div>
+                     </div>
                   </CardContent>
                 </Card>
               ))}
@@ -355,6 +397,13 @@ const Admin = () => {
             applicationId={viewingApp}
             onClose={() => setViewingApp(null)}
             onStatusChange={(id, status) => setApplications((p) => p.map((a) => a.id === id ? { ...a, status } : a))}
+          />
+        )}
+        {templatesFor && (
+          <OfferTemplateManager
+            workflowId={templatesFor.id}
+            workflowName={templatesFor.name}
+            onClose={() => setTemplatesFor(null)}
           />
         )}
       </main>
