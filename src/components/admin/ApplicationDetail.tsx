@@ -7,7 +7,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Calendar, Check, Clock, Eye, FileText, Loader2, Mail, MessageSquare, Phone, RefreshCcw, Stamp, User, UserCheck, X } from "lucide-react";
+import { Check, Eye, FileText, Loader2, Mail, MessageSquare, Phone, RefreshCcw, Stamp, User, UserCheck, X } from "lucide-react";
 import { MessageThread } from "@/components/MessageThread";
 import { useAuth } from "@/contexts/AuthContext";
 import { PreviewPackButton } from "@/pages/Apply";
@@ -154,12 +154,6 @@ export const ApplicationDetail = ({ applicationId, onClose, onStatusChange }: Pr
   }
 
   if (!app) return null;
-
-  const timeline = [
-    { label: "Created", at: app.created_at, icon: Clock },
-    { label: "Submitted", at: app.submitted_at, icon: Check },
-    { label: "Reviewed", at: app.reviewed_at, icon: Eye },
-  ].filter((t) => t.at);
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
