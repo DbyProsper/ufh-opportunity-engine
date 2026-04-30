@@ -7,11 +7,12 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Calendar, Check, Clock, Eye, FileText, Loader2, Mail, MessageSquare, Phone, RefreshCcw, Stamp, User, UserCheck, X } from "lucide-react";
+import { Check, Eye, FileText, Loader2, Mail, MessageSquare, Phone, RefreshCcw, Stamp, User, UserCheck, X } from "lucide-react";
 import { MessageThread } from "@/components/MessageThread";
 import { useAuth } from "@/contexts/AuthContext";
 import { PreviewPackButton } from "@/pages/Apply";
 import { OfferPanel } from "@/components/OfferPanel";
+import { EventTimeline, TimelineEvent } from "@/components/EventTimeline";
 
 interface Props {
   applicationId: string;
@@ -34,6 +35,7 @@ export const ApplicationDetail = ({ applicationId, onClose, onStatusChange }: Pr
   const [admins, setAdmins] = useState<any[]>([]);
   const [reasonOpen, setReasonOpen] = useState<null | "rejected" | "changes_requested">(null);
   const [reason, setReason] = useState("");
+  const [events, setEvents] = useState<TimelineEvent[]>([]);
 
   useEffect(() => {
     (async () => {
@@ -54,6 +56,13 @@ export const ApplicationDetail = ({ applicationId, onClose, onStatusChange }: Pr
       const map: Record<string, string> = {};
       (mR.data ?? []).forEach((r: any) => { map[r.field_id] = r.value ?? ""; });
       setResponses(map);
+
+      const { data: evR } = await supabase
+        .from("application_events" as any)
+        .select("*")
+        .eq("application_id", applicationId)
+        .order("created_at", { ascending: true });
+      setEvents((evR as any[] ?? []) as TimelineEvent[]);
 
       // Load admin reviewers (everyone with admin role)
       const { data: adminRoles } = await supabase.from("user_roles").select("user_id").eq("role", "admin");
@@ -145,12 +154,6 @@ export const ApplicationDetail = ({ applicationId, onClose, onStatusChange }: Pr
   }
 
   if (!app) return null;
-
-  const timeline = [
-    { label: "Created", at: app.created_at, icon: Clock },
-    { label: "Submitted", at: app.submitted_at, icon: Check },
-    { label: "Reviewed", at: app.reviewed_at, icon: Eye },
-  ].filter((t) => t.at);
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
@@ -251,17 +254,7 @@ export const ApplicationDetail = ({ applicationId, onClose, onStatusChange }: Pr
           </TabsContent>
 
           <TabsContent value="timeline" className="mt-4">
-            <ol className="relative border-l border-border pl-6 space-y-5">
-              {timeline.map((t, i) => (
-                <li key={i}>
-                  <span className="absolute -left-[9px] flex w-4 h-4 items-center justify-center rounded-full bg-primary text-primary-foreground">
-                    <t.icon className="w-2.5 h-2.5" />
-                  </span>
-                  <p className="text-sm font-medium">{t.label}</p>
-                  <p className="text-xs text-muted-foreground flex items-center gap-1"><Calendar className="w-3 h-3" /> {new Date(t.at!).toLocaleString()}</p>
-                </li>
-              ))}
-            </ol>
+            <EventTimeline events={events} empty="No events recorded yet." />
           </TabsContent>
         </Tabs>
 
@@ -297,9 +290,10 @@ export const ApplicationDetail = ({ applicationId, onClose, onStatusChange }: Pr
               <DialogTitle>{reasonOpen === "rejected" ? "Reason for rejection" : "What should the applicant fix?"}</DialogTitle>
             </DialogHeader>
             <Textarea rows={5} value={reason} onChange={(e) => setReason(e.target.value)} placeholder={reasonOpen === "rejected" ? "Explain why this application is being rejected." : "Tell the applicant exactly what to update so they can resubmit."} />
+            <p className="text-xs text-muted-foreground">A note is required and will be shown to the applicant.</p>
             <DialogFooter>
               <Button variant="outline" onClick={() => { setReasonOpen(null); setReason(""); }}>Cancel</Button>
-              <Button onClick={submitReason} className={reasonOpen === "rejected" ? "bg-destructive text-destructive-foreground hover:bg-destructive/90" : "btn-gradient-primary text-primary-foreground"}>
+              <Button onClick={submitReason} disabled={!reason.trim()} className={reasonOpen === "rejected" ? "bg-destructive text-destructive-foreground hover:bg-destructive/90" : "btn-gradient-primary text-primary-foreground"}>
                 {reasonOpen === "rejected" ? "Reject" : "Send back for edits"}
               </Button>
             </DialogFooter>

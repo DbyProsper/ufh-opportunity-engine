@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Bell } from "lucide-react";
+import { Bell, Volume2, VolumeX } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Popover,
@@ -10,6 +10,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { Link } from "react-router-dom";
 import { formatDistanceToNow } from "date-fns";
+import { useNotificationSound } from "@/hooks/useNotificationSound";
 
 interface Notification {
   id: string;
@@ -24,6 +25,7 @@ interface Notification {
 export const NotificationBell = () => {
   const { user } = useAuth();
   const [items, setItems] = useState<Notification[]>([]);
+  const { enabled: soundOn, setEnabled: setSoundOn, play } = useNotificationSound();
 
   useEffect(() => {
     if (!user) return;
@@ -43,12 +45,15 @@ export const NotificationBell = () => {
       .on(
         "postgres_changes",
         { event: "INSERT", schema: "public", table: "notifications", filter: `user_id=eq.${user.id}` },
-        (payload) => setItems((prev) => [payload.new as Notification, ...prev])
+        (payload) => {
+          setItems((prev) => [payload.new as Notification, ...prev]);
+          play();
+        }
       )
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };
-  }, [user]);
+  }, [user, play]);
 
   const unread = items.filter((n) => !n.read_at).length;
 
@@ -78,6 +83,13 @@ export const NotificationBell = () => {
         <div className="flex items-center justify-between p-3 border-b">
           <h4 className="font-semibold text-sm">Notifications</h4>
           <div className="flex items-center gap-3">
+            <button
+              onClick={() => setSoundOn(!soundOn)}
+              title={soundOn ? "Mute notification sound" : "Enable notification sound"}
+              className="text-muted-foreground hover:text-foreground"
+            >
+              {soundOn ? <Volume2 className="w-3.5 h-3.5" /> : <VolumeX className="w-3.5 h-3.5" />}
+            </button>
             {unread > 0 && (
               <button onClick={markAllRead} className="text-xs text-primary hover:underline">
                 Mark all read

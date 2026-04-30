@@ -56,6 +56,50 @@ export type Database = {
           },
         ]
       }
+      application_events: {
+        Row: {
+          actor_id: string | null
+          application_id: string
+          created_at: string
+          event_type: string
+          from_status: string | null
+          id: string
+          message: string | null
+          metadata: Json | null
+          to_status: string | null
+        }
+        Insert: {
+          actor_id?: string | null
+          application_id: string
+          created_at?: string
+          event_type: string
+          from_status?: string | null
+          id?: string
+          message?: string | null
+          metadata?: Json | null
+          to_status?: string | null
+        }
+        Update: {
+          actor_id?: string | null
+          application_id?: string
+          created_at?: string
+          event_type?: string
+          from_status?: string | null
+          id?: string
+          message?: string | null
+          metadata?: Json | null
+          to_status?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "application_events_application_id_fkey"
+            columns: ["application_id"]
+            isOneToOne: false
+            referencedRelation: "applications"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       application_responses: {
         Row: {
           application_id: string
@@ -309,6 +353,53 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "offer_documents_offer_id_fkey"
+            columns: ["offer_id"]
+            isOneToOne: false
+            referencedRelation: "offers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      offer_events: {
+        Row: {
+          actor_id: string | null
+          created_at: string
+          event_type: string
+          from_status: string | null
+          id: string
+          message: string | null
+          metadata: Json | null
+          offer_id: string
+          to_status: string | null
+          version: number | null
+        }
+        Insert: {
+          actor_id?: string | null
+          created_at?: string
+          event_type: string
+          from_status?: string | null
+          id?: string
+          message?: string | null
+          metadata?: Json | null
+          offer_id: string
+          to_status?: string | null
+          version?: number | null
+        }
+        Update: {
+          actor_id?: string | null
+          created_at?: string
+          event_type?: string
+          from_status?: string | null
+          id?: string
+          message?: string | null
+          metadata?: Json | null
+          offer_id?: string
+          to_status?: string | null
+          version?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "offer_events_offer_id_fkey"
             columns: ["offer_id"]
             isOneToOne: false
             referencedRelation: "offers"

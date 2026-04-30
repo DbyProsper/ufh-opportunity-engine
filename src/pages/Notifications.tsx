@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Loader2, Bell, MessageSquare, Inbox, CheckCheck } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
+import { useNotificationSound } from "@/hooks/useNotificationSound";
 
 interface Notif {
   id: string;
@@ -24,25 +25,20 @@ const Notifications = () => {
   const { user, loading: authLoading } = useAuth();
   const navigate = useNavigate();
   const [items, setItems] = useState<Notif[]>([]);
-  const [threads, setThreads] = useState<any[]>([]);
-  const [apps, setApps] = useState<any[]>([]);
   const [workflows, setWorkflows] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const { play } = useNotificationSound();
 
   useEffect(() => { if (!authLoading && !user) navigate("/auth"); }, [authLoading, user, navigate]);
 
   useEffect(() => {
     if (!user) return;
     (async () => {
-      const [nR, tR, aR, wR] = await Promise.all([
+      const [nR, wR] = await Promise.all([
         supabase.from("notifications").select("*").eq("user_id", user.id).order("created_at", { ascending: false }).limit(200),
-        supabase.from("message_threads").select("*"),
-        supabase.from("applications").select("id,workflow_id,user_id"),
         supabase.from("workflows").select("id,name"),
       ]);
       setItems((nR.data as Notif[]) ?? []);
-      setThreads(tR.data ?? []);
-      setApps(aR.data ?? []);
       setWorkflows(wR.data ?? []);
       setLoading(false);
     })();
@@ -52,30 +48,35 @@ const Notifications = () => {
       .on(
         "postgres_changes",
         { event: "INSERT", schema: "public", table: "notifications", filter: `user_id=eq.${user.id}` },
-        (p) => setItems((prev) => [p.new as Notif, ...prev])
+        (p) => { setItems((prev) => [p.new as Notif, ...prev]); play(); }
       )
       .subscribe();
     return () => { supabase.removeChannel(channel); };
-  }, [user]);
+  }, [user, play]);
 
   const grouped = useMemo(() => {
-    // Group message-style notifications by workflow → thread; everything else into "Other"
-    const messageItems = items.filter((n) => /message/i.test(n.title));
-    const otherItems = items.filter((n) => !/message/i.test(n.title));
-
-    // For applicants: every thread maps to one of their applications → workflow
-    // For admins: messages don't carry application id, so we keep them under "Reviewer messages"
+    // Group by detected workflow name in body; fall back to type-based buckets.
+    const wfNames = workflows.map((w) => w.name as string).sort((a, b) => b.length - a.length);
     const byWorkflow = new Map<string, { name: string; items: Notif[] }>();
-    messageItems.forEach((n) => {
-      // Heuristic: pull workflow from /apply/:slug or fall back to "Reviewer inbox"
-      const wfMatch = n.body?.match(/about your ([^.]+?)\./i) || n.body?.match(/on a ([^ ]+) thread/i);
-      const key = wfMatch ? wfMatch[1].trim() : "Reviewer messages";
-      if (!byWorkflow.has(key)) byWorkflow.set(key, { name: key, items: [] });
-      byWorkflow.get(key)!.items.push(n);
+    const other: Notif[] = [];
+
+    items.forEach((n) => {
+      const haystack = `${n.title} ${n.body ?? ""}`.toLowerCase();
+      const matched = wfNames.find((nm) => nm && haystack.includes(nm.toLowerCase()));
+      if (matched) {
+        if (!byWorkflow.has(matched)) byWorkflow.set(matched, { name: matched, items: [] });
+        byWorkflow.get(matched)!.items.push(n);
+      } else if (/message/i.test(n.title)) {
+        const key = "Messages";
+        if (!byWorkflow.has(key)) byWorkflow.set(key, { name: key, items: [] });
+        byWorkflow.get(key)!.items.push(n);
+      } else {
+        other.push(n);
+      }
     });
 
-    return { byWorkflow: Array.from(byWorkflow.values()), other: otherItems };
-  }, [items, threads, apps, workflows]);
+    return { byWorkflow: Array.from(byWorkflow.values()), other };
+  }, [items, workflows]);
 
   const unreadCount = items.filter((n) => !n.read_at).length;
 
@@ -83,6 +84,14 @@ const Notifications = () => {
     if (!user) return;
     await supabase.from("notifications").update({ read_at: new Date().toISOString() }).eq("user_id", user.id).is("read_at", null);
     setItems((prev) => prev.map((n) => ({ ...n, read_at: n.read_at ?? new Date().toISOString() })));
+  };
+
+  const markGroupRead = async (groupItems: Notif[]) => {
+    const ids = groupItems.filter((n) => !n.read_at).map((n) => n.id);
+    if (ids.length === 0) return;
+    await supabase.from("notifications").update({ read_at: new Date().toISOString() }).in("id", ids);
+    const set = new Set(ids);
+    setItems((prev) => prev.map((n) => set.has(n.id) ? { ...n, read_at: new Date().toISOString() } : n));
   };
 
   const markOne = async (id: string) => {
@@ -129,10 +138,17 @@ const Notifications = () => {
                     <CardContent className="p-4">
                       <div className="flex items-center justify-between gap-2 mb-2">
                         <h3 className="font-semibold text-sm">{g.name}</h3>
-                        {unread > 0 && <Badge className="bg-accent text-accent-foreground">{unread} unread</Badge>}
+                        <div className="flex items-center gap-2">
+                          {unread > 0 && <Badge className="bg-accent text-accent-foreground">{unread} unread</Badge>}
+                          {unread > 0 && (
+                            <button onClick={() => markGroupRead(g.items)} className="text-xs text-primary hover:underline">
+                              Mark read
+                            </button>
+                          )}
+                        </div>
                       </div>
                       <ul className="space-y-1.5">
-                        {g.items.slice(0, 5).map((n) => (
+                        {g.items.slice(0, 8).map((n) => (
                           <li key={n.id}>
                             <button
                               onClick={() => { markOne(n.id); if (n.link) navigate(n.link); }}
