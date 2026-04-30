@@ -433,14 +433,26 @@ const Apply = () => {
   );
 };
 
-export const PreviewPackButton = ({ applicationId, label = "Preview pack" }: { applicationId: string; label?: string }) => {
+export const PreviewPackButton = ({
+  applicationId,
+  label = "Preview pack",
+  includeOfferSigned = false,
+  title = "Application pack preview",
+}: {
+  applicationId: string;
+  label?: string;
+  includeOfferSigned?: boolean;
+  title?: string;
+}) => {
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
   const [url, setUrl] = useState<string | null>(null);
   const generate = async () => {
     setLoading(true); setOpen(true); setUrl(null);
     try {
-      const { data, error } = await supabase.functions.invoke("generate-application-pdf", { body: { applicationId } });
+      const { data, error } = await supabase.functions.invoke("generate-application-pdf", {
+        body: { applicationId, includeOfferSigned },
+      });
       if (error) throw error;
       const u = (data as any)?.url;
       if (!u) throw new Error("No URL returned");
@@ -461,7 +473,7 @@ export const PreviewPackButton = ({ applicationId, label = "Preview pack" }: { a
       <Dialog open={open} onOpenChange={(o) => { if (!o) { setOpen(false); setUrl(null); } }}>
         <DialogContent className="max-w-5xl h-[85vh] flex flex-col p-4">
           <DialogHeader>
-            <DialogTitle>Application pack preview</DialogTitle>
+            <DialogTitle>{title}</DialogTitle>
           </DialogHeader>
           <div className="flex-1 min-h-0 border rounded-md overflow-hidden bg-muted">
             {url ? (
