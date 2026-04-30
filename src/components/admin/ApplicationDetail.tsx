@@ -290,9 +290,10 @@ export const ApplicationDetail = ({ applicationId, onClose, onStatusChange }: Pr
               <DialogTitle>{reasonOpen === "rejected" ? "Reason for rejection" : "What should the applicant fix?"}</DialogTitle>
             </DialogHeader>
             <Textarea rows={5} value={reason} onChange={(e) => setReason(e.target.value)} placeholder={reasonOpen === "rejected" ? "Explain why this application is being rejected." : "Tell the applicant exactly what to update so they can resubmit."} />
+            <p className="text-xs text-muted-foreground">A note is required and will be shown to the applicant.</p>
             <DialogFooter>
               <Button variant="outline" onClick={() => { setReasonOpen(null); setReason(""); }}>Cancel</Button>
-              <Button onClick={submitReason} className={reasonOpen === "rejected" ? "bg-destructive text-destructive-foreground hover:bg-destructive/90" : "btn-gradient-primary text-primary-foreground"}>
+              <Button onClick={submitReason} disabled={!reason.trim()} className={reasonOpen === "rejected" ? "bg-destructive text-destructive-foreground hover:bg-destructive/90" : "btn-gradient-primary text-primary-foreground"}>
                 {reasonOpen === "rejected" ? "Reject" : "Send back for edits"}
               </Button>
             </DialogFooter>
