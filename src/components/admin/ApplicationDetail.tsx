@@ -12,6 +12,7 @@ import { MessageThread } from "@/components/MessageThread";
 import { useAuth } from "@/contexts/AuthContext";
 import { PreviewPackButton } from "@/pages/Apply";
 import { OfferPanel } from "@/components/OfferPanel";
+import { EventTimeline, TimelineEvent } from "@/components/EventTimeline";
 
 interface Props {
   applicationId: string;
@@ -34,6 +35,7 @@ export const ApplicationDetail = ({ applicationId, onClose, onStatusChange }: Pr
   const [admins, setAdmins] = useState<any[]>([]);
   const [reasonOpen, setReasonOpen] = useState<null | "rejected" | "changes_requested">(null);
   const [reason, setReason] = useState("");
+  const [events, setEvents] = useState<TimelineEvent[]>([]);
 
   useEffect(() => {
     (async () => {
@@ -54,6 +56,13 @@ export const ApplicationDetail = ({ applicationId, onClose, onStatusChange }: Pr
       const map: Record<string, string> = {};
       (mR.data ?? []).forEach((r: any) => { map[r.field_id] = r.value ?? ""; });
       setResponses(map);
+
+      const { data: evR } = await supabase
+        .from("application_events" as any)
+        .select("*")
+        .eq("application_id", applicationId)
+        .order("created_at", { ascending: true });
+      setEvents((evR as any[] ?? []) as TimelineEvent[]);
 
       // Load admin reviewers (everyone with admin role)
       const { data: adminRoles } = await supabase.from("user_roles").select("user_id").eq("role", "admin");
@@ -251,17 +260,7 @@ export const ApplicationDetail = ({ applicationId, onClose, onStatusChange }: Pr
           </TabsContent>
 
           <TabsContent value="timeline" className="mt-4">
-            <ol className="relative border-l border-border pl-6 space-y-5">
-              {timeline.map((t, i) => (
-                <li key={i}>
-                  <span className="absolute -left-[9px] flex w-4 h-4 items-center justify-center rounded-full bg-primary text-primary-foreground">
-                    <t.icon className="w-2.5 h-2.5" />
-                  </span>
-                  <p className="text-sm font-medium">{t.label}</p>
-                  <p className="text-xs text-muted-foreground flex items-center gap-1"><Calendar className="w-3 h-3" /> {new Date(t.at!).toLocaleString()}</p>
-                </li>
-              ))}
-            </ol>
+            <EventTimeline events={events} empty="No events recorded yet." />
           </TabsContent>
         </Tabs>
 
