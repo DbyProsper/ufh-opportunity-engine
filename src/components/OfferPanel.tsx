@@ -371,14 +371,15 @@ const SendOfferDialog = ({ open, onClose, templates, pickedTemplate, setPickedTe
   </Dialog>
 );
 
-const ReasonDialog = ({ open, onClose, title, placeholder, reason, setReason, onSubmit, confirmLabel, destructive }: any) => (
+const ReasonDialog = ({ open, onClose, title, placeholder, reason, setReason, onSubmit, confirmLabel, destructive, required }: any) => (
   <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
     <DialogContent>
       <DialogHeader><DialogTitle>{title}</DialogTitle></DialogHeader>
       <Textarea rows={4} value={reason} onChange={(e) => setReason(e.target.value)} placeholder={placeholder} />
+      {required && <p className="text-xs text-muted-foreground">A note is required.</p>}
       <DialogFooter>
         <Button variant="outline" onClick={onClose}>Cancel</Button>
-        <Button onClick={onSubmit} className={destructive ? "bg-destructive text-destructive-foreground hover:bg-destructive/90" : "btn-gradient-primary text-primary-foreground"}>
+        <Button onClick={onSubmit} disabled={required && !reason.trim()} className={destructive ? "bg-destructive text-destructive-foreground hover:bg-destructive/90" : "btn-gradient-primary text-primary-foreground"}>
           {confirmLabel}
         </Button>
       </DialogFooter>
