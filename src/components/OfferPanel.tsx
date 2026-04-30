@@ -9,6 +9,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Loader2, FileText, Upload, Download, Send, Check, X, RefreshCcw, Stamp } from "lucide-react";
 import { toast } from "sonner";
+import { EventTimeline, TimelineEvent } from "@/components/EventTimeline";
+import { PreviewPackButton } from "@/pages/Apply";
 
 interface Props {
   applicationId: string;
@@ -24,6 +26,7 @@ export const OfferPanel = ({ applicationId, workflowId, applicantId, isAdmin, on
   const [offer, setOffer] = useState<any>(null);
   const [docs, setDocs] = useState<any[]>([]);
   const [templates, setTemplates] = useState<any[]>([]);
+  const [events, setEvents] = useState<TimelineEvent[]>([]);
   const [uploading, setUploading] = useState(false);
   const [showSend, setShowSend] = useState(false);
   const [showRevise, setShowRevise] = useState(false);
@@ -41,10 +44,15 @@ export const OfferPanel = ({ applicationId, workflowId, applicantId, isAdmin, on
     setOffer(oR.data);
     setTemplates(tR.data ?? []);
     if (oR.data) {
-      const dR = await supabase.from("offer_documents").select("*").eq("offer_id", oR.data.id).order("created_at");
+      const [dR, eR] = await Promise.all([
+        supabase.from("offer_documents").select("*").eq("offer_id", oR.data.id).order("created_at"),
+        supabase.from("offer_events" as any).select("*").eq("offer_id", oR.data.id).order("created_at", { ascending: true }),
+      ]);
       setDocs(dR.data ?? []);
+      setEvents((eR.data as any[] ?? []) as TimelineEvent[]);
     } else {
       setDocs([]);
+      setEvents([]);
     }
     setLoading(false);
   };
@@ -84,7 +92,7 @@ export const OfferPanel = ({ applicationId, workflowId, applicantId, isAdmin, on
   };
 
   const requestRevision = async () => {
-    if (!reason.trim()) return toast.error("Please add a reason");
+    if (!reason.trim()) return toast.error("A note is required so the applicant knows what to change");
     const { error } = await supabase.from("offers").update({
       status: "revision_requested" as any,
       rejection_reason: reason.trim(),
@@ -271,9 +279,22 @@ export const OfferPanel = ({ applicationId, workflowId, applicantId, isAdmin, on
         {/* Admin actions on signed copies */}
         {isAdmin && latestSigned && status !== "approved" && status !== "rejected" && (
           <div className="flex flex-wrap gap-2 pt-2 border-t">
+            <PreviewPackButton
+              applicationId={applicationId}
+              includeOfferSigned
+              label="Preview with signed copy"
+              title="Offer pack preview"
+            />
             <Button size="sm" variant="outline" onClick={() => setShowRevise(true)}><RefreshCcw className="w-3.5 h-3.5 mr-1" /> Request revision</Button>
             <Button size="sm" variant="outline" className="text-destructive" onClick={() => setShowReject(true)}><X className="w-3.5 h-3.5 mr-1" /> Reject</Button>
             <Button size="sm" className="btn-gradient-primary text-primary-foreground" onClick={approveOffer}><Check className="w-3.5 h-3.5 mr-1" /> Approve</Button>
+          </div>
+        )}
+
+        {events.length > 0 && (
+          <div className="pt-3 border-t">
+            <p className="text-xs font-semibold text-muted-foreground mb-3 uppercase tracking-wide">Audit timeline</p>
+            <EventTimeline events={events} />
           </div>
         )}
       </CardContent>
@@ -286,13 +307,15 @@ export const OfferPanel = ({ applicationId, workflowId, applicantId, isAdmin, on
 
       <ReasonDialog
         open={showRevise} onClose={() => setShowRevise(false)}
-        title="Request a revised copy" placeholder="What needs to be corrected on the signed copy?"
+        title="Request a revised copy"
+        placeholder="Explain exactly what the applicant must correct on the signed copy. This note is required and will be shown to them."
         reason={reason} setReason={setReason} onSubmit={requestRevision} confirmLabel="Send request"
+        required
       />
       <ReasonDialog
         open={showReject} onClose={() => setShowReject(false)}
         title="Reject offer" placeholder="Reason the offer is being rejected"
-        reason={reason} setReason={setReason} onSubmit={rejectOffer} confirmLabel="Reject offer" destructive
+        reason={reason} setReason={setReason} onSubmit={rejectOffer} confirmLabel="Reject offer" destructive required
       />
     </Card>
   );
