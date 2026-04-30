@@ -30,7 +30,7 @@ Deno.serve(async (req) => {
       });
     }
 
-    const { applicationId } = await req.json().catch(() => ({}));
+    const { applicationId, includeOfferSigned } = await req.json().catch(() => ({}));
     if (!applicationId || typeof applicationId !== "string") {
       return new Response(JSON.stringify({ error: "applicationId required" }), {
         status: 400,
@@ -210,6 +210,39 @@ Deno.serve(async (req) => {
         copied.forEach((p) => pdf.addPage(p));
       } catch (e) {
         console.error("merge failed", d.file_name, e);
+      }
+    }
+
+    // Optionally append the latest signed offer document
+    if (includeOfferSigned) {
+      try {
+        const { data: offerRow } = await admin
+          .from("offers").select("id").eq("application_id", applicationId).maybeSingle();
+        if (offerRow) {
+          const { data: signedDocs } = await admin
+            .from("offer_documents")
+            .select("*")
+            .eq("offer_id", offerRow.id)
+            .eq("kind", "signed")
+            .order("version", { ascending: false })
+            .limit(1);
+          const latest = signedDocs?.[0];
+          if (latest && (latest.file_name ?? "").toLowerCase().endsWith(".pdf")) {
+            const dl = await admin.storage.from("offer-signed").download(latest.file_path);
+            if (!dl.error && dl.data) {
+              const sBytes = new Uint8Array(await dl.data.arrayBuffer());
+              const src = await PDFDocument.load(sBytes, { ignoreEncryption: true });
+              page = pdf.addPage([pageWidth, pageHeight]);
+              y = pageHeight - margin;
+              drawText("Signed offer", { size: 10, color: rgb(0.5, 0.5, 0.55) });
+              drawText(`v${latest.version} · ${latest.file_name}`, { bold: true, size: 14 });
+              const copied = await pdf.copyPages(src, src.getPageIndices());
+              copied.forEach((p) => pdf.addPage(p));
+            }
+          }
+        }
+      } catch (e) {
+        console.error("signed-offer merge failed", e);
       }
     }
 
