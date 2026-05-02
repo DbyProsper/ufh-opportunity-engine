@@ -14,6 +14,51 @@ export type Database = {
   }
   public: {
     Tables: {
+      addresses: {
+        Row: {
+          city: string | null
+          country: string | null
+          created_at: string
+          id: string
+          is_primary: boolean
+          kind: string
+          line1: string | null
+          line2: string | null
+          postal_code: string | null
+          province: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          city?: string | null
+          country?: string | null
+          created_at?: string
+          id?: string
+          is_primary?: boolean
+          kind?: string
+          line1?: string | null
+          line2?: string | null
+          postal_code?: string | null
+          province?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          city?: string | null
+          country?: string | null
+          created_at?: string
+          id?: string
+          is_primary?: boolean
+          kind?: string
+          line1?: string | null
+          line2?: string | null
+          postal_code?: string | null
+          province?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       application_documents: {
         Row: {
           application_id: string
@@ -192,6 +237,45 @@ export type Database = {
           },
         ]
       }
+      banking_details: {
+        Row: {
+          account_holder: string | null
+          account_number: string | null
+          account_type: string | null
+          bank_name: string | null
+          branch_code: string | null
+          created_at: string
+          id: string
+          is_primary: boolean
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          account_holder?: string | null
+          account_number?: string | null
+          account_type?: string | null
+          bank_name?: string | null
+          branch_code?: string | null
+          created_at?: string
+          id?: string
+          is_primary?: boolean
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          account_holder?: string | null
+          account_number?: string | null
+          account_type?: string | null
+          bank_name?: string | null
+          branch_code?: string | null
+          created_at?: string
+          id?: string
+          is_primary?: boolean
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       eligibility_rules: {
         Row: {
           created_at: string
@@ -223,6 +307,84 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      employment_details: {
+        Row: {
+          created_at: string
+          employer: string | null
+          end_date: string | null
+          id: string
+          is_current: boolean
+          notes: string | null
+          position: string | null
+          start_date: string | null
+          supervisor_contact: string | null
+          supervisor_name: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          employer?: string | null
+          end_date?: string | null
+          id?: string
+          is_current?: boolean
+          notes?: string | null
+          position?: string | null
+          start_date?: string | null
+          supervisor_contact?: string | null
+          supervisor_name?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          employer?: string | null
+          end_date?: string | null
+          id?: string
+          is_current?: boolean
+          notes?: string | null
+          position?: string | null
+          start_date?: string | null
+          supervisor_contact?: string | null
+          supervisor_name?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      financial_profile: {
+        Row: {
+          created_at: string
+          dependants: number | null
+          income_tax_ref: string | null
+          marital_status: string | null
+          sars_tax_number: string | null
+          updated_at: string
+          user_id: string
+          vat_number: string | null
+        }
+        Insert: {
+          created_at?: string
+          dependants?: number | null
+          income_tax_ref?: string | null
+          marital_status?: string | null
+          sars_tax_number?: string | null
+          updated_at?: string
+          user_id: string
+          vat_number?: string | null
+        }
+        Update: {
+          created_at?: string
+          dependants?: number | null
+          income_tax_ref?: string | null
+          marital_status?: string | null
+          sars_tax_number?: string | null
+          updated_at?: string
+          user_id?: string
+          vat_number?: string | null
+        }
+        Relationships: []
       }
       message_threads: {
         Row: {
@@ -282,6 +444,45 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      next_of_kin: {
+        Row: {
+          address: string | null
+          created_at: string
+          email: string | null
+          full_name: string | null
+          id: string
+          is_primary: boolean
+          phone: string | null
+          relationship: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          address?: string | null
+          created_at?: string
+          email?: string | null
+          full_name?: string | null
+          id?: string
+          is_primary?: boolean
+          phone?: string | null
+          relationship?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          address?: string | null
+          created_at?: string
+          email?: string | null
+          full_name?: string | null
+          id?: string
+          is_primary?: boolean
+          phone?: string | null
+          relationship?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
       }
       notifications: {
         Row: {
@@ -505,15 +706,23 @@ export type Database = {
           cv_path: string | null
           cv_text: string | null
           cv_uploaded_at: string | null
+          date_of_birth: string | null
           department: string | null
+          disability: string | null
           email: string
           faculty: string | null
           full_name: string | null
+          gender: string | null
+          home_language: string | null
           id: string
+          id_number: string | null
+          nationality: string | null
           phone: string | null
           qualification: string | null
+          race: string | null
           staff_number: string | null
           student_number: string | null
+          title: string | null
           updated_at: string
           year_of_study: string | null
         }
@@ -525,15 +734,23 @@ export type Database = {
           cv_path?: string | null
           cv_text?: string | null
           cv_uploaded_at?: string | null
+          date_of_birth?: string | null
           department?: string | null
+          disability?: string | null
           email: string
           faculty?: string | null
           full_name?: string | null
+          gender?: string | null
+          home_language?: string | null
           id: string
+          id_number?: string | null
+          nationality?: string | null
           phone?: string | null
           qualification?: string | null
+          race?: string | null
           staff_number?: string | null
           student_number?: string | null
+          title?: string | null
           updated_at?: string
           year_of_study?: string | null
         }
@@ -545,15 +762,23 @@ export type Database = {
           cv_path?: string | null
           cv_text?: string | null
           cv_uploaded_at?: string | null
+          date_of_birth?: string | null
           department?: string | null
+          disability?: string | null
           email?: string
           faculty?: string | null
           full_name?: string | null
+          gender?: string | null
+          home_language?: string | null
           id?: string
+          id_number?: string | null
+          nationality?: string | null
           phone?: string | null
           qualification?: string | null
+          race?: string | null
           staff_number?: string | null
           student_number?: string | null
+          title?: string | null
           updated_at?: string
           year_of_study?: string | null
         }
