@@ -56,6 +56,27 @@ const Apply = () => {
       setDocs(docsRes.data ?? []);
       setProfile(profRes.data);
 
+      // Pull related profile tables for richer auto-fill
+      const [{ data: addrs }, { data: noks }, { data: fin }, { data: banks }, { data: emps }] = await Promise.all([
+        (supabase.from as any)("addresses").select("*").eq("user_id", user.id),
+        (supabase.from as any)("next_of_kin").select("*").eq("user_id", user.id).limit(1),
+        (supabase.from as any)("financial_profile").select("*").eq("user_id", user.id).maybeSingle(),
+        (supabase.from as any)("banking_details").select("*").eq("user_id", user.id).limit(1),
+        (supabase.from as any)("employment_details").select("*").eq("user_id", user.id).order("is_current", { ascending: false }).limit(1),
+      ]);
+      const addrHome = ((addrs as any[]) ?? []).find((a) => a.kind === "home") ?? (addrs as any[])?.[0];
+      const addrPost = ((addrs as any[]) ?? []).find((a) => a.kind === "postal");
+      const profileLookup: Record<string, any> = { ...(profRes.data ?? {}) };
+      const prefixMap: Record<string, any> = {
+        "address.": addrHome,
+        "address1.": addrHome,
+        "address2.": addrPost,
+        "nok.": ((noks as any[]) ?? [])[0],
+        "fin.": fin,
+        "bank.": ((banks as any[]) ?? [])[0],
+        "employment.": ((emps as any[]) ?? [])[0],
+      };
+
       // get-or-create application
       let { data: app } = await supabase.from("applications").select("*").eq("user_id", user.id).eq("workflow_id", wf.id).maybeSingle();
       if (!app) {
@@ -79,8 +100,21 @@ const Apply = () => {
 
       // auto-fill from profile for any field with profile_field
       (fieldsRes.data ?? []).forEach((f: any) => {
-        if (!respMap[f.id] && f.profile_field && profRes.data?.[f.profile_field]) {
-          respMap[f.id] = String(profRes.data[f.profile_field]);
+        if (respMap[f.id] || !f.profile_field) return;
+        const pf: string = f.profile_field;
+        // 1) Direct profile column
+        if (profileLookup[pf] != null && profileLookup[pf] !== "") {
+          respMap[f.id] = String(profileLookup[pf]);
+          return;
+        }
+        // 2) Prefixed lookup, e.g. "address.line1", "bank.account_number"
+        const prefixKey = Object.keys(prefixMap).find((k) => pf.startsWith(k));
+        if (prefixKey) {
+          const src = prefixMap[prefixKey];
+          const col = pf.slice(prefixKey.length);
+          if (src && src[col] != null && src[col] !== "") {
+            respMap[f.id] = String(src[col]);
+          }
         }
       });
       setResponses(respMap);
