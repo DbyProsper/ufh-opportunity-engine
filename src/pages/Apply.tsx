@@ -100,8 +100,21 @@ const Apply = () => {
 
       // auto-fill from profile for any field with profile_field
       (fieldsRes.data ?? []).forEach((f: any) => {
-        if (!respMap[f.id] && f.profile_field && profRes.data?.[f.profile_field]) {
-          respMap[f.id] = String(profRes.data[f.profile_field]);
+        if (respMap[f.id] || !f.profile_field) return;
+        const pf: string = f.profile_field;
+        // 1) Direct profile column
+        if (profileLookup[pf] != null && profileLookup[pf] !== "") {
+          respMap[f.id] = String(profileLookup[pf]);
+          return;
+        }
+        // 2) Prefixed lookup, e.g. "address.line1", "bank.account_number"
+        const prefixKey = Object.keys(prefixMap).find((k) => pf.startsWith(k));
+        if (prefixKey) {
+          const src = prefixMap[prefixKey];
+          const col = pf.slice(prefixKey.length);
+          if (src && src[col] != null && src[col] !== "") {
+            respMap[f.id] = String(src[col]);
+          }
         }
       });
       setResponses(respMap);
