@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Loader2, Upload, FileText, Sparkles, Trash2, Eye, RefreshCcw, Plus } from "lucide-react";
+import { Loader2, Upload, FileText, Sparkles, Trash2, Eye, RefreshCcw } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { UFH_FACULTIES, UFH_FACULTY_NAMES } from "@/data/ufh";
 import { useSectionAutoSave, type SaveStatus } from "@/hooks/useSectionAutoSave";
