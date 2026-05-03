@@ -13,6 +13,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { PreviewPackButton } from "@/pages/Apply";
 import { OfferPanel } from "@/components/OfferPanel";
 import { EventTimeline, TimelineEvent } from "@/components/EventTimeline";
+import { AffidavitPanel } from "@/components/AffidavitPanel";
 
 interface Props {
   applicationId: string;
@@ -173,6 +174,7 @@ export const ApplicationDetail = ({ applicationId, onClose, onStatusChange }: Pr
             <TabsTrigger value="docs">Documents ({docs.length})</TabsTrigger>
             <TabsTrigger value="messages"><MessageSquare className="w-3.5 h-3.5 mr-1" /> Messages</TabsTrigger>
             <TabsTrigger value="offer"><Stamp className="w-3.5 h-3.5 mr-1" /> Offer</TabsTrigger>
+            <TabsTrigger value="affidavit"><Stamp className="w-3.5 h-3.5 mr-1" /> Affidavit</TabsTrigger>
             <TabsTrigger value="timeline">Timeline</TabsTrigger>
           </TabsList>
 
@@ -250,6 +252,12 @@ export const ApplicationDetail = ({ applicationId, onClose, onStatusChange }: Pr
                 applicantId={app.user_id}
                 isAdmin
               />
+            )}
+          </TabsContent>
+
+          <TabsContent value="affidavit" className="mt-4">
+            {app && (
+              <AffidavitPanel applicationId={app.id} applicantId={app.user_id} isAdmin />
             )}
           </TabsContent>
 
