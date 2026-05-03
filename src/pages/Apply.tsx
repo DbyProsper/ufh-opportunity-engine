@@ -18,6 +18,7 @@ import { Download } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { OfferPanel } from "@/components/OfferPanel";
 import { Sparkles, AlertCircle } from "lucide-react";
+import { AffidavitPanel } from "@/components/AffidavitPanel";
 
 const Apply = () => {
   const { slug } = useParams();
@@ -444,6 +445,20 @@ const Apply = () => {
 
         {submitted && application && user && (
           <>
+            {/* Official UFH document downloads */}
+            <Card className="mt-6">
+              <CardHeader><CardTitle className="text-lg">Official UFH documents</CardTitle></CardHeader>
+              <CardContent className="flex flex-wrap gap-2">
+                <UFHDocButton applicationId={application.id} kind="personal_info" label="Tutor Personal Information Form" />
+                <UFHDocButton applicationId={application.id} kind="acceptance" label="Acceptance of Post" />
+              </CardContent>
+            </Card>
+
+            {/* Hybrid affidavit workflow */}
+            <div className="mt-6">
+              <AffidavitPanel applicationId={application.id} applicantId={user.id} />
+            </div>
+
             {application.status === "approved" && (
               <div className="mt-6">
                 <OfferPanel applicationId={application.id} workflowId={workflow.id} applicantId={user.id} isAdmin={false} />
