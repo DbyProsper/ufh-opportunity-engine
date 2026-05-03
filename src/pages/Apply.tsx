@@ -549,6 +549,38 @@ export const PreviewPackButton = ({
   );
 };
 
+export const UFHDocButton = ({
+  applicationId,
+  kind,
+  label,
+}: {
+  applicationId: string;
+  kind: "personal_info" | "acceptance" | "affidavit_blank";
+  label: string;
+}) => {
+  const [loading, setLoading] = useState(false);
+  const generate = async () => {
+    setLoading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("generate-ufh-pdf", {
+        body: { applicationId, kind },
+      });
+      if (error) throw error;
+      const u = (data as any)?.url;
+      if (!u) throw new Error("No URL returned");
+      window.open(u, "_blank");
+    } catch (e: any) {
+      toast.error(e?.message ?? "Failed to generate document");
+    } finally { setLoading(false); }
+  };
+  return (
+    <Button size="sm" variant="outline" onClick={generate} disabled={loading}>
+      {loading ? <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" /> : <Download className="w-3.5 h-3.5 mr-1" />}
+      {label}
+    </Button>
+  );
+};
+
 const FieldRenderer = ({ field, value, onChange, disabled }: { field: any; value: string; onChange: (v: string) => void; disabled?: boolean }) => {
   const common = { id: field.id, value, disabled, placeholder: field.placeholder ?? "" };
   const opts: string[] = Array.isArray(field.options) ? field.options : [];
