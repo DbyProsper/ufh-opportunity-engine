@@ -18,6 +18,7 @@ import { Download } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { OfferPanel } from "@/components/OfferPanel";
 import { Sparkles, AlertCircle } from "lucide-react";
+import { AffidavitPanel } from "@/components/AffidavitPanel";
 
 const Apply = () => {
   const { slug } = useParams();
@@ -444,6 +445,20 @@ const Apply = () => {
 
         {submitted && application && user && (
           <>
+            {/* Official UFH document downloads */}
+            <Card className="mt-6">
+              <CardHeader><CardTitle className="text-lg">Official UFH documents</CardTitle></CardHeader>
+              <CardContent className="flex flex-wrap gap-2">
+                <UFHDocButton applicationId={application.id} kind="personal_info" label="Tutor Personal Information Form" />
+                <UFHDocButton applicationId={application.id} kind="acceptance" label="Acceptance of Post" />
+              </CardContent>
+            </Card>
+
+            {/* Hybrid affidavit workflow */}
+            <div className="mt-6">
+              <AffidavitPanel applicationId={application.id} applicantId={user.id} />
+            </div>
+
             {application.status === "approved" && (
               <div className="mt-6">
                 <OfferPanel applicationId={application.id} workflowId={workflow.id} applicantId={user.id} isAdmin={false} />
@@ -531,6 +546,38 @@ export const PreviewPackButton = ({
         </DialogContent>
       </Dialog>
     </>
+  );
+};
+
+export const UFHDocButton = ({
+  applicationId,
+  kind,
+  label,
+}: {
+  applicationId: string;
+  kind: "personal_info" | "acceptance" | "affidavit_blank";
+  label: string;
+}) => {
+  const [loading, setLoading] = useState(false);
+  const generate = async () => {
+    setLoading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("generate-ufh-pdf", {
+        body: { applicationId, kind },
+      });
+      if (error) throw error;
+      const u = (data as any)?.url;
+      if (!u) throw new Error("No URL returned");
+      window.open(u, "_blank");
+    } catch (e: any) {
+      toast.error(e?.message ?? "Failed to generate document");
+    } finally { setLoading(false); }
+  };
+  return (
+    <Button size="sm" variant="outline" onClick={generate} disabled={loading}>
+      {loading ? <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" /> : <Download className="w-3.5 h-3.5 mr-1" />}
+      {label}
+    </Button>
   );
 };
 
