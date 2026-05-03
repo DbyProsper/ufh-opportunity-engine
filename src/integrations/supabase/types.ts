@@ -59,6 +59,57 @@ export type Database = {
         }
         Relationships: []
       }
+      affidavit_submissions: {
+        Row: {
+          admin_notes: string | null
+          application_id: string
+          created_at: string
+          generated_at: string | null
+          generated_path: string | null
+          id: string
+          status: string
+          updated_at: string
+          uploaded_at: string | null
+          uploaded_file_name: string | null
+          uploaded_path: string | null
+          user_id: string
+          verified_at: string | null
+          verified_by: string | null
+        }
+        Insert: {
+          admin_notes?: string | null
+          application_id: string
+          created_at?: string
+          generated_at?: string | null
+          generated_path?: string | null
+          id?: string
+          status?: string
+          updated_at?: string
+          uploaded_at?: string | null
+          uploaded_file_name?: string | null
+          uploaded_path?: string | null
+          user_id: string
+          verified_at?: string | null
+          verified_by?: string | null
+        }
+        Update: {
+          admin_notes?: string | null
+          application_id?: string
+          created_at?: string
+          generated_at?: string | null
+          generated_path?: string | null
+          id?: string
+          status?: string
+          updated_at?: string
+          uploaded_at?: string | null
+          uploaded_file_name?: string | null
+          uploaded_path?: string | null
+          user_id?: string
+          verified_at?: string | null
+          verified_by?: string | null
+        }
+        Relationships: []
+      }
       application_documents: {
         Row: {
           application_id: string
@@ -781,6 +832,51 @@ export type Database = {
           title?: string | null
           updated_at?: string
           year_of_study?: string | null
+        }
+        Relationships: []
+      }
+      signatures: {
+        Row: {
+          application_id: string | null
+          context: string
+          created_at: string
+          file_name: string
+          file_path: string
+          id: string
+          ip_address: string | null
+          method: string
+          offer_id: string | null
+          typed_name: string | null
+          user_agent: string | null
+          user_id: string
+        }
+        Insert: {
+          application_id?: string | null
+          context?: string
+          created_at?: string
+          file_name: string
+          file_path: string
+          id?: string
+          ip_address?: string | null
+          method: string
+          offer_id?: string | null
+          typed_name?: string | null
+          user_agent?: string | null
+          user_id: string
+        }
+        Update: {
+          application_id?: string | null
+          context?: string
+          created_at?: string
+          file_name?: string
+          file_path?: string
+          id?: string
+          ip_address?: string | null
+          method?: string
+          offer_id?: string | null
+          typed_name?: string | null
+          user_agent?: string | null
+          user_id?: string
         }
         Relationships: []
       }
