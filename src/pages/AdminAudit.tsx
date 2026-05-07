@@ -55,8 +55,8 @@ const AdminAudit = () => {
   useEffect(() => {
     if (!user || !isAdmin) { setLoading(false); return; }
     (async () => {
-      const { data } = await supabase.from("audit_log" as any).select("*").order("created_at", { ascending: false }).limit(500);
-      setRows((data as AuditRow[]) ?? []);
+      const { data } = await (supabase.from as any)("audit_log").select("*").order("created_at", { ascending: false }).limit(500);
+      setRows(((data as unknown) as AuditRow[]) ?? []);
       setLoading(false);
     })();
   }, [user, isAdmin]);

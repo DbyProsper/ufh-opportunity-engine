@@ -66,15 +66,15 @@ export const OfferTemplateManager = ({ workflowId, workflowName, onClose }: Prop
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Offer templates — {workflowName}</DialogTitle>
         </DialogHeader>
         <div className="space-y-4">
           <div className="border rounded-lg p-3 space-y-2 bg-muted/30">
             <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Upload new template</p>
-            <Input placeholder="Template name (e.g. Tutor offer letter)" value={name} onChange={(e) => setName(e.target.value)} />
-            <Textarea placeholder="Short description (optional)" rows={2} value={description} onChange={(e) => setDescription(e.target.value)} />
+            <Input className="w-full" placeholder="Template name (e.g. Tutor offer letter)" value={name} onChange={(e) => setName(e.target.value)} />
+            <Textarea className="w-full resize-none break-words" placeholder="Short description (optional)" rows={2} value={description} onChange={(e) => setDescription(e.target.value)} />
             <div className="flex items-center gap-2 flex-wrap">
               <label className="cursor-pointer">
                 <input type="file" accept=".pdf,.doc,.docx,image/*" className="hidden" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />

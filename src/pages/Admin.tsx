@@ -18,6 +18,10 @@ import { Loader2, Plus, Sparkles, Eye, Check, X, ShieldAlert, Search, Settings2,
 import { WorkflowEditor } from "@/components/admin/WorkflowEditor";
 import { ApplicationDetail } from "@/components/admin/ApplicationDetail";
 import { OfferTemplateManager } from "@/components/admin/OfferTemplateManager";
+import { AIWorkflowDialog } from "@/components/admin/AIWorkflowDialog";
+import { BackButton } from "@/components/BackButton";
+import { Link } from "react-router-dom";
+import { History } from "lucide-react";
 import { UFH_FACULTIES, UFH_FACULTY_NAMES } from "@/data/ufh";
 
 const Admin = () => {
@@ -34,6 +38,7 @@ const Admin = () => {
   const [viewingApp, setViewingApp] = useState<string | null>(null);
   const [templatesFor, setTemplatesFor] = useState<{ id: string; name: string } | null>(null);
   const [admins, setAdmins] = useState<any[]>([]);
+  const [aiOpen, setAiOpen] = useState(false);
 
   // filters
   const [audienceTab, setAudienceTab] = useState<"all" | "student" | "staff">("all");
@@ -182,7 +187,19 @@ const Admin = () => {
             <h1 className="text-2xl md:text-3xl font-bold">Admin Console</h1>
             <p className="text-muted-foreground text-sm">Manage workflows and review applications.</p>
           </div>
+          <div className="flex items-center gap-2">
+            <Button size="sm" variant="outline" onClick={() => setAiOpen(true)}>
+              <Sparkles className="w-3.5 h-3.5 mr-1 text-accent" /> AI workflow
+            </Button>
+            <Link to="/admin/audit"><Button size="sm" variant="outline"><History className="w-3.5 h-3.5 mr-1" /> Audit trail</Button></Link>
+          </div>
         </div>
+
+        <AIWorkflowDialog
+          open={aiOpen}
+          onClose={() => setAiOpen(false)}
+          onCreated={(wf) => { setWorkflows((p) => [wf, ...p]); setEditingWf(wf.id); setTab("workflows"); }}
+        />
 
         <Tabs value={tab} onValueChange={setTab}>
           <TabsList className="mb-6">
