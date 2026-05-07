@@ -288,6 +288,48 @@ export type Database = {
           },
         ]
       }
+      audit_log: {
+        Row: {
+          actor_email: string | null
+          actor_id: string | null
+          after: Json | null
+          before: Json | null
+          changed_keys: string[] | null
+          context: Json | null
+          created_at: string
+          id: string
+          operation: string
+          row_id: string | null
+          table_name: string
+        }
+        Insert: {
+          actor_email?: string | null
+          actor_id?: string | null
+          after?: Json | null
+          before?: Json | null
+          changed_keys?: string[] | null
+          context?: Json | null
+          created_at?: string
+          id?: string
+          operation: string
+          row_id?: string | null
+          table_name: string
+        }
+        Update: {
+          actor_email?: string | null
+          actor_id?: string | null
+          after?: Json | null
+          before?: Json | null
+          changed_keys?: string[] | null
+          context?: Json | null
+          created_at?: string
+          id?: string
+          operation?: string
+          row_id?: string | null
+          table_name?: string
+        }
+        Relationships: []
+      }
       banking_details: {
         Row: {
           account_holder: string | null
@@ -570,6 +612,7 @@ export type Database = {
       }
       offer_documents: {
         Row: {
+          bucket: string | null
           created_at: string
           file_name: string
           file_path: string
@@ -581,6 +624,7 @@ export type Database = {
           version: number
         }
         Insert: {
+          bucket?: string | null
           created_at?: string
           file_name: string
           file_path: string
@@ -592,6 +636,7 @@ export type Database = {
           version?: number
         }
         Update: {
+          bucket?: string | null
           created_at?: string
           file_name?: string
           file_path?: string
@@ -897,6 +942,24 @@ export type Database = {
           created_at?: string
           id?: string
           role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: []
+      }
+      user_settings: {
+        Row: {
+          notif_sound_enabled: boolean
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          notif_sound_enabled?: boolean
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          notif_sound_enabled?: boolean
+          updated_at?: string
           user_id?: string
         }
         Relationships: []
