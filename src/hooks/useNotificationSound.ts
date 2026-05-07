@@ -1,17 +1,46 @@
 import { useCallback, useEffect, useState } from "react";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
 
-const KEY = "notif-sound-enabled";
+const KEY = "notif-sound-enabled"; // local cache for instant UI
 
+/**
+ * Per-user notification sound preference, persisted server-side in
+ * `user_settings` so it follows the user across devices.
+ */
 export const useNotificationSound = () => {
-  const [enabled, setEnabled] = useState<boolean>(() => {
+  const { user } = useAuth();
+  const [enabled, setEnabledState] = useState<boolean>(() => {
     if (typeof window === "undefined") return false;
     return window.localStorage.getItem(KEY) === "1";
   });
 
+  // Hydrate from server when we have a user
   useEffect(() => {
-    if (typeof window === "undefined") return;
-    window.localStorage.setItem(KEY, enabled ? "1" : "0");
-  }, [enabled]);
+    if (!user) return;
+    (async () => {
+      const { data } = await supabase
+        .from("user_settings" as any)
+        .select("notif_sound_enabled")
+        .eq("user_id", user.id)
+        .maybeSingle();
+      if (data && typeof (data as any).notif_sound_enabled === "boolean") {
+        const v = (data as any).notif_sound_enabled as boolean;
+        setEnabledState(v);
+        window.localStorage.setItem(KEY, v ? "1" : "0");
+      }
+    })();
+  }, [user]);
+
+  const setEnabled = useCallback(async (next: boolean) => {
+    setEnabledState(next);
+    if (typeof window !== "undefined") window.localStorage.setItem(KEY, next ? "1" : "0");
+    if (user) {
+      await supabase
+        .from("user_settings" as any)
+        .upsert({ user_id: user.id, notif_sound_enabled: next } as any, { onConflict: "user_id" });
+    }
+  }, [user]);
 
   const play = useCallback(() => {
     if (!enabled || typeof window === "undefined") return;

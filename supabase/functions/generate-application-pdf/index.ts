@@ -133,19 +133,31 @@ Deno.serve(async (req) => {
       y -= 8;
     };
 
-    // Header
+    // === COVER PAGE ===
     drawText("UFH Opportunity Hub", { bold: true, size: 18, color: rgb(0.1, 0.2, 0.5) });
-    drawText("Application Pack", { size: 11, color: rgb(0.4, 0.4, 0.45) });
+    drawText(`${workflow?.name ?? "Application"} — Document Pack`, { bold: true, size: 22 });
+    y -= 8; hr();
+
+    const coverInfo: [string, string][] = [
+      ["Name", profile?.full_name ?? "—"],
+      ["Student / Staff #", profile?.student_number || profile?.staff_number || "—"],
+      ["Department", profile?.department ?? "—"],
+      ["Faculty / Office", profile?.faculty ?? "—"],
+      ["Application ID", app.id],
+      ["Date approved", app.reviewed_at ? new Date(app.reviewed_at).toLocaleDateString() : (app.submitted_at ? new Date(app.submitted_at).toLocaleDateString() : "—")],
+      ["Status", app.status],
+    ];
+    for (const [k, v] of coverInfo) {
+      ensureSpace(20);
+      page.drawText(k.toUpperCase(), { x: margin, y, size: 8, font: fontBold, color: rgb(0.45, 0.47, 0.55) });
+      y -= 12;
+      page.drawText(String(v), { x: margin, y, size: 12, font, color: rgb(0.05, 0.07, 0.15) });
+      y -= 14;
+    }
     y -= 6; hr();
 
-    drawText(workflow?.name ?? "Application", { bold: true, size: 14 });
-    drawText(`Status: ${app.status}`, { size: 10 });
-    drawText(`Submitted: ${app.submitted_at ? new Date(app.submitted_at).toLocaleString() : "—"}`, { size: 10 });
-    drawText(`Application ID: ${app.id}`, { size: 9, color: rgb(0.5, 0.5, 0.55) });
-    y -= 4; hr();
-
-    // Applicant info
-    drawText("Applicant", { bold: true, size: 12 });
+    // Applicant detail block
+    drawText("Applicant details", { bold: true, size: 12 });
     const info: [string, string | null | undefined][] = [
       ["Full name", profile?.full_name],
       ["Email", profile?.email],
@@ -190,26 +202,57 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Merge PDF attachments
+    // Merge PDF attachments — track failures so we can warn the admin
+    const mergeFailures: { name: string; reason: string }[] = [];
     for (const d of docFiles ?? []) {
       const isPdf = (d.file_name ?? "").toLowerCase().endsWith(".pdf");
-      if (!isPdf) continue;
+      const meta = (docMeta ?? []).find((m: any) => m.id === d.document_id);
+      const niceName = meta?.name ?? d.file_name;
+      if (!isPdf) {
+        mergeFailures.push({ name: niceName, reason: `Non-PDF file (${d.file_name}) cannot be merged.` });
+        continue;
+      }
       try {
         const dl = await admin.storage.from("application-documents").download(d.file_path);
-        if (dl.error || !dl.data) continue;
+        if (dl.error || !dl.data) {
+          mergeFailures.push({ name: niceName, reason: "File could not be downloaded." });
+          continue;
+        }
         const bytes = new Uint8Array(await dl.data.arrayBuffer());
-        const src = await PDFDocument.load(bytes, { ignoreEncryption: true });
+        let src;
+        try {
+          src = await PDFDocument.load(bytes, { ignoreEncryption: true });
+        } catch (loadErr: any) {
+          mergeFailures.push({ name: niceName, reason: "This file is encrypted and could not be decrypted automatically." });
+          continue;
+        }
         // Separator page
         page = pdf.addPage([pageWidth, pageHeight]);
         y = pageHeight - margin;
         drawText("Attachment", { size: 10, color: rgb(0.5, 0.5, 0.55) });
-        const meta = (docMeta ?? []).find((m: any) => m.id === d.document_id);
-        drawText(meta?.name ?? d.file_name, { bold: true, size: 14 });
+        drawText(niceName, { bold: true, size: 14 });
         drawText(d.file_name, { size: 10, color: rgb(0.5, 0.5, 0.55) });
         const copied = await pdf.copyPages(src, src.getPageIndices());
         copied.forEach((p) => pdf.addPage(p));
-      } catch (e) {
+      } catch (e: any) {
         console.error("merge failed", d.file_name, e);
+        mergeFailures.push({ name: niceName, reason: e?.message ?? "Unknown error during merge." });
+      }
+    }
+
+    // Encryption / merge-failure disclaimer page
+    if (mergeFailures.length > 0) {
+      page = pdf.addPage([pageWidth, pageHeight]);
+      y = pageHeight - margin;
+      drawText("DOCUMENTS COULD NOT BE MERGED", { bold: true, size: 16, color: rgb(0.7, 0.1, 0.1) });
+      y -= 6;
+      drawText("The following files could not be automatically merged into this pack. Please download them manually from the applicant's profile.", { size: 10, color: rgb(0.3, 0.3, 0.35) });
+      y -= 6;
+      for (const f of mergeFailures) {
+        ensureSpace(40);
+        drawText(`• ${f.name}`, { bold: true, size: 11 });
+        drawText(f.reason, { size: 9, indent: 12, color: rgb(0.45, 0.47, 0.55) });
+        y -= 4;
       }
     }
 
