@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { AppHeader } from "@/components/AppHeader";
+import { BackButton } from "@/components/BackButton";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -373,6 +374,7 @@ const ProfilePage = () => {
     <div className="min-h-screen bg-background flex flex-col">
       <AppHeader />
       <main className="container mx-auto px-4 py-6 md:py-8 flex-1 max-w-4xl w-full">
+        <BackButton to="/dashboard" label="Back to dashboard" />
         <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
           <div>
             <h1 className="text-2xl md:text-3xl font-bold mb-1">My Profile</h1>
