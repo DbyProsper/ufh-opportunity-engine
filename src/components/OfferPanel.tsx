@@ -198,7 +198,7 @@ export const OfferPanel = ({ applicationId, workflowId, applicantId, isAdmin, on
         </CardContent>
         <SendOfferDialog
           open={showSend} onClose={() => setShowSend(false)}
-          templates={templates} pickedTemplate={pickedTemplate} setPickedTemplate={setPickedTemplate}
+          templates={templates} pickedTemplates={pickedTemplates} setPickedTemplates={setPickedTemplates}
           message={message} setMessage={setMessage} onSend={sendOffer} sending={uploading}
         />
       </Card>
