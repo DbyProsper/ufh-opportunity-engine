@@ -262,7 +262,7 @@ export const ApplicationDetail = ({ applicationId, onClose, onStatusChange }: Pr
           </TabsContent>
 
           <TabsContent value="timeline" className="mt-4">
-            <EventTimeline events={events} empty="No events recorded yet." />
+            <EventTimeline events={events} empty="No events recorded yet." filterable />
           </TabsContent>
         </Tabs>
 
