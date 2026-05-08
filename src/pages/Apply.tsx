@@ -19,6 +19,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { OfferPanel } from "@/components/OfferPanel";
 import { Sparkles, AlertCircle } from "lucide-react";
 import { AffidavitPanel } from "@/components/AffidavitPanel";
+import { BackButton } from "@/components/BackButton";
 
 const Apply = () => {
   const { slug } = useParams();
@@ -266,6 +267,7 @@ const Apply = () => {
     <div className="min-h-screen bg-background flex flex-col">
       <AppHeader />
       <main className="container mx-auto px-4 py-6 md:py-8 flex-1 max-w-4xl w-full">
+        <BackButton to="/dashboard" label="Back to dashboard" />
         <div className="mb-6">
           <h1 className="text-2xl md:text-3xl font-bold">{workflow.name}</h1>
           <p className="text-muted-foreground">{workflow.description}</p>
