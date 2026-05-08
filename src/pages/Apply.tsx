@@ -489,11 +489,13 @@ export const PreviewPackButton = ({
   label = "Preview pack",
   includeOfferSigned = false,
   title = "Application pack preview",
+  signedCopyAvailable,
 }: {
   applicationId: string;
   label?: string;
   includeOfferSigned?: boolean;
   title?: string;
+  signedCopyAvailable?: boolean;
 }) => {
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
@@ -528,7 +530,14 @@ export const PreviewPackButton = ({
           </DialogHeader>
           <div className="flex-1 min-h-0 border rounded-md overflow-hidden bg-muted">
             {url ? (
-              <iframe src={url} title="Application pack" className="w-full h-full" />
+              <div className="w-full h-full flex flex-col">
+                {includeOfferSigned && signedCopyAvailable === false && (
+                  <div className="bg-warning/10 text-warning border-b border-warning/30 px-3 py-2 text-xs">
+                    No signed offer copy is available yet — showing the application pack without the signed offer.
+                  </div>
+                )}
+                <iframe src={url} title="Application pack" className="w-full flex-1" />
+              </div>
             ) : (
               <div className="w-full h-full flex items-center justify-center text-sm text-muted-foreground gap-2">
                 <Loader2 className="w-4 h-4 animate-spin" /> Generating preview…
