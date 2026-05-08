@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { AppHeader } from "@/components/AppHeader";
+import { BackButton } from "@/components/BackButton";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
@@ -107,6 +108,7 @@ const Notifications = () => {
     <div className="min-h-screen bg-background flex flex-col">
       <AppHeader />
       <main className="container mx-auto px-4 py-6 md:py-8 flex-1 max-w-3xl w-full">
+        <BackButton to="/dashboard" label="Back to dashboard" />
         <div className="flex items-center justify-between mb-6 gap-3 flex-wrap">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
