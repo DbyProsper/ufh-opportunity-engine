@@ -20,7 +20,6 @@ import { ApplicationDetail } from "@/components/admin/ApplicationDetail";
 import { OfferTemplateManager } from "@/components/admin/OfferTemplateManager";
 import { AIWorkflowDialog } from "@/components/admin/AIWorkflowDialog";
 import { BackButton } from "@/components/BackButton";
-import { Link } from "react-router-dom";
 import { History } from "lucide-react";
 import { UFH_FACULTIES, UFH_FACULTY_NAMES } from "@/data/ufh";
 
