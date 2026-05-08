@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Loader2, FileText, Upload, Download, Send, Check, X, RefreshCcw, Stamp } from "lucide-react";
 import { toast } from "sonner";
@@ -32,7 +33,7 @@ export const OfferPanel = ({ applicationId, workflowId, applicantId, isAdmin, on
   const [showRevise, setShowRevise] = useState(false);
   const [showReject, setShowReject] = useState(false);
   const [reason, setReason] = useState("");
-  const [pickedTemplate, setPickedTemplate] = useState<string>("");
+  const [pickedTemplates, setPickedTemplates] = useState<string[]>([]);
   const [message, setMessage] = useState("");
 
   const load = async () => {
@@ -67,25 +68,40 @@ export const OfferPanel = ({ applicationId, workflowId, applicantId, isAdmin, on
 
   // ─── Admin actions ────────────────────────────────────────────────
   const sendOffer = async () => {
-    if (!pickedTemplate) return toast.error("Pick an offer template first");
-    const tpl = templates.find((t) => t.id === pickedTemplate);
-    if (!tpl) return;
+    if (pickedTemplates.length === 0) return toast.error("Pick at least one offer template");
+    const chosen = templates.filter((t) => pickedTemplates.includes(t.id));
+    if (chosen.length === 0) return;
+    const primary = chosen[0];
     setUploading(true);
     const { data, error } = await supabase.from("offers").upsert({
       application_id: applicationId,
-      template_id: tpl.id,
-      template_path: tpl.file_path,
-      template_name: tpl.file_name,
+      template_id: primary.id,
+      template_path: primary.file_path,
+      template_name: primary.file_name,
       message: message || null,
       status: "template_sent" as any,
       sent_at: new Date().toISOString(),
       reviewer_id: user!.id,
     } as any, { onConflict: "application_id" }).select().single();
+    if (error) { setUploading(false); return toast.error(error.message); }
+    // Attach all chosen templates as offer_documents (kind='template') so applicant downloads everything at once.
+    if (data) {
+      const rows = chosen.map((t) => ({
+        offer_id: (data as any).id,
+        kind: "template",
+        version: 1,
+        file_path: t.file_path,
+        file_name: t.file_name,
+        bucket: "offer-templates",
+        uploaded_by: user!.id,
+        notes: t.name,
+      }));
+      await supabase.from("offer_documents").insert(rows as any);
+    }
     setUploading(false);
-    if (error) return toast.error(error.message);
     setShowSend(false);
-    setMessage(""); setPickedTemplate("");
-    toast.success("Offer template sent to applicant");
+    setMessage(""); setPickedTemplates([]);
+    toast.success(`${chosen.length} offer ${chosen.length === 1 ? "template" : "templates"} sent to applicant`);
     setOffer(data);
     onAfterChange?.();
     load();
@@ -190,6 +206,7 @@ export const OfferPanel = ({ applicationId, workflowId, applicantId, isAdmin, on
   }
 
   const signedDocs = docs.filter((d) => d.kind === "signed").sort((a, b) => b.version - a.version);
+  const templateDocs = docs.filter((d) => d.kind === "template");
   const latestSigned = signedDocs[0];
   const status = offer.status as string;
 
@@ -214,7 +231,27 @@ export const OfferPanel = ({ applicationId, workflowId, applicantId, isAdmin, on
         )}
 
         {/* Template */}
-        {offer.template_path && (
+        {templateDocs.length > 0 ? (
+          <div>
+            <p className="text-xs font-semibold text-muted-foreground mb-2 uppercase tracking-wide">Offer templates ({templateDocs.length})</p>
+            <div className="space-y-2">
+              {templateDocs.map((d) => (
+                <div key={d.id} className="flex items-center justify-between p-2.5 border rounded-lg gap-2">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <FileText className="w-4 h-4 text-primary shrink-0" />
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium truncate">{d.notes || d.file_name}</p>
+                      <p className="text-[11px] text-muted-foreground truncate">{d.file_name}</p>
+                    </div>
+                  </div>
+                  <Button size="sm" variant="outline" onClick={() => openFile(d.bucket || "offer-templates", d.file_path)}>
+                    <Download className="w-3.5 h-3.5" />
+                  </Button>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : offer.template_path && (
           <div className="flex items-center justify-between p-3 border rounded-lg gap-2 flex-wrap">
             <div className="flex items-center gap-2 min-w-0">
               <FileText className="w-4 h-4 text-primary shrink-0" />
@@ -277,31 +314,39 @@ export const OfferPanel = ({ applicationId, workflowId, applicantId, isAdmin, on
         )}
 
         {/* Admin actions on signed copies */}
-        {isAdmin && latestSigned && status !== "approved" && status !== "rejected" && (
+        {isAdmin && status !== "approved" && status !== "rejected" && (
           <div className="flex flex-wrap gap-2 pt-2 border-t">
             <PreviewPackButton
               applicationId={applicationId}
               includeOfferSigned
               label="Preview with signed copy"
               title="Offer pack preview"
+              signedCopyAvailable={!!latestSigned}
             />
-            <Button size="sm" variant="outline" onClick={() => setShowRevise(true)}><RefreshCcw className="w-3.5 h-3.5 mr-1" /> Request revision</Button>
-            <Button size="sm" variant="outline" className="text-destructive" onClick={() => setShowReject(true)}><X className="w-3.5 h-3.5 mr-1" /> Reject</Button>
-            <Button size="sm" className="btn-gradient-primary text-primary-foreground" onClick={approveOffer}><Check className="w-3.5 h-3.5 mr-1" /> Approve</Button>
+            {latestSigned && (
+              <>
+                <Button size="sm" variant="outline" onClick={() => setShowRevise(true)}><RefreshCcw className="w-3.5 h-3.5 mr-1" /> Request revision</Button>
+                <Button size="sm" variant="outline" className="text-destructive" onClick={() => setShowReject(true)}><X className="w-3.5 h-3.5 mr-1" /> Reject</Button>
+                <Button size="sm" className="btn-gradient-primary text-primary-foreground" onClick={approveOffer}><Check className="w-3.5 h-3.5 mr-1" /> Approve</Button>
+              </>
+            )}
+            {!latestSigned && (
+              <p className="text-xs text-muted-foreground self-center">Awaiting applicant to upload a signed copy before review actions become available.</p>
+            )}
           </div>
         )}
 
         {events.length > 0 && (
           <div className="pt-3 border-t">
             <p className="text-xs font-semibold text-muted-foreground mb-3 uppercase tracking-wide">Audit timeline</p>
-            <EventTimeline events={events} />
+            <EventTimeline events={events} filterable />
           </div>
         )}
       </CardContent>
 
       <SendOfferDialog
         open={showSend} onClose={() => setShowSend(false)}
-        templates={templates} pickedTemplate={pickedTemplate} setPickedTemplate={setPickedTemplate}
+        templates={templates} pickedTemplates={pickedTemplates} setPickedTemplates={setPickedTemplates}
         message={message} setMessage={setMessage} onSend={sendOffer} sending={uploading}
       />
 
@@ -342,19 +387,39 @@ const OfferBadge = ({ status }: { status: string }) => {
   return <Badge className={`capitalize ${map[status] ?? "bg-muted text-foreground"}`}>{label[status] ?? status.replace(/_/g, " ")}</Badge>;
 };
 
-const SendOfferDialog = ({ open, onClose, templates, pickedTemplate, setPickedTemplate, message, setMessage, onSend, sending }: any) => (
+const SendOfferDialog = ({ open, onClose, templates, pickedTemplates, setPickedTemplates, message, setMessage, onSend, sending }: any) => {
+  const toggle = (id: string) => {
+    setPickedTemplates((prev: string[]) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    );
+  };
+  const allIds = templates.map((t: any) => t.id);
+  const allSelected = templates.length > 0 && pickedTemplates.length === templates.length;
+  return (
   <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-    <DialogContent>
+    <DialogContent className="max-w-lg">
       <DialogHeader><DialogTitle>Send offer</DialogTitle></DialogHeader>
       <div className="space-y-3">
         <div className="space-y-1.5">
-          <p className="text-sm font-medium">Offer template</p>
-          <Select value={pickedTemplate} onValueChange={setPickedTemplate}>
-            <SelectTrigger><SelectValue placeholder="Pick a template" /></SelectTrigger>
-            <SelectContent className="bg-popover">
-              {templates.map((t: any) => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}
-            </SelectContent>
-          </Select>
+          <div className="flex items-center justify-between">
+            <p className="text-sm font-medium">Offer templates ({pickedTemplates.length} selected)</p>
+            <Button size="sm" variant="ghost" className="h-6 text-xs" onClick={() => setPickedTemplates(allSelected ? [] : allIds)}>
+              {allSelected ? "Clear all" : "Select all"}
+            </Button>
+          </div>
+          <div className="border rounded-md max-h-56 overflow-y-auto divide-y">
+            {templates.length === 0 && <p className="p-3 text-xs text-muted-foreground">No templates available.</p>}
+            {templates.map((t: any) => (
+              <label key={t.id} className="flex items-start gap-2 p-2.5 hover:bg-muted/40 cursor-pointer">
+                <Checkbox checked={pickedTemplates.includes(t.id)} onCheckedChange={() => toggle(t.id)} className="mt-0.5" />
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-medium truncate">{t.name}</p>
+                  <p className="text-xs text-muted-foreground truncate">{t.file_name}</p>
+                </div>
+              </label>
+            ))}
+          </div>
+          <p className="text-[11px] text-muted-foreground">Applicant will receive and download all selected templates together.</p>
         </div>
         <div className="space-y-1.5">
           <p className="text-sm font-medium">Message to applicant (optional)</p>
@@ -363,13 +428,14 @@ const SendOfferDialog = ({ open, onClose, templates, pickedTemplate, setPickedTe
       </div>
       <DialogFooter>
         <Button variant="outline" onClick={onClose}>Cancel</Button>
-        <Button onClick={onSend} disabled={sending} className="btn-gradient-primary text-primary-foreground">
+        <Button onClick={onSend} disabled={sending || pickedTemplates.length === 0} className="btn-gradient-primary text-primary-foreground">
           {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4 mr-1" />} Send
         </Button>
       </DialogFooter>
     </DialogContent>
   </Dialog>
-);
+  );
+};
 
 const ReasonDialog = ({ open, onClose, title, placeholder, reason, setReason, onSubmit, confirmLabel, destructive, required }: any) => (
   <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
