@@ -582,6 +582,29 @@ const ProfilePage = () => {
 
         {/* Saved documents */}
         <Card className="mt-6">
+
+        </Card>
+        {Object.keys(profileExtra).length > 0 && (
+          <Card className="mt-6">
+            <CardHeader>
+              <CardTitle className="text-base flex items-center gap-2"><Sparkles className="w-4 h-4 text-accent" /> Additional information</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-xs text-muted-foreground mb-3">
+                Extra details collected from application forms — these grow your profile so future applications auto-fill them.
+              </p>
+              <div className="grid sm:grid-cols-2 gap-3">
+                {Object.entries(profileExtra).map(([key, entry]) => (
+                  <div key={key} className="p-3 border rounded-lg bg-muted/30">
+                    <p className="text-[11px] uppercase tracking-wide text-muted-foreground">{entry.label || key}</p>
+                    <p className="text-sm font-medium break-words">{entry.value}</p>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+        <Card className="mt-6 hidden">
           <CardHeader className="flex flex-row items-center justify-between gap-2">
             <CardTitle className="text-base">Saved Documents</CardTitle>
             <Button size="sm" variant="outline" onClick={syncFromApplications} disabled={syncing}>
