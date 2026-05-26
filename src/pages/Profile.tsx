@@ -580,10 +580,6 @@ const ProfilePage = () => {
           </SectionCard>
         </div>
 
-        {/* Saved documents */}
-        <Card className="mt-6">
-
-        </Card>
         {Object.keys(profileExtra).length > 0 && (
           <Card className="mt-6">
             <CardHeader>
@@ -604,7 +600,8 @@ const ProfilePage = () => {
             </CardContent>
           </Card>
         )}
-        <Card className="mt-6 hidden">
+        {/* Saved documents */}
+        <Card className="mt-6">
           <CardHeader className="flex flex-row items-center justify-between gap-2">
             <CardTitle className="text-base">Saved Documents</CardTitle>
             <Button size="sm" variant="outline" onClick={syncFromApplications} disabled={syncing}>
