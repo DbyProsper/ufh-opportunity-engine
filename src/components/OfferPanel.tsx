@@ -9,9 +9,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Loader2, FileText, Upload, Download, Send, Check, X, RefreshCcw, Stamp } from "lucide-react";
+import { PenLine } from "lucide-react";
 import { toast } from "sonner";
 import { EventTimeline, TimelineEvent } from "@/components/EventTimeline";
 import { PreviewPackButton } from "@/pages/Apply";
+import { SignaturePad } from "@/components/SignaturePad";
 
 interface Props {
   applicationId: string;
@@ -35,6 +37,7 @@ export const OfferPanel = ({ applicationId, workflowId, applicantId, isAdmin, on
   const [reason, setReason] = useState("");
   const [pickedTemplates, setPickedTemplates] = useState<string[]>([]);
   const [message, setMessage] = useState("");
+  const [showSign, setShowSign] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -163,6 +166,35 @@ export const OfferPanel = ({ applicationId, workflowId, applicantId, isAdmin, on
     if (error) return toast.error(error.message);
     toast.success("Signed copy uploaded — admin will be notified.");
     load();
+  };
+
+  // Inline e-signature: take saved signature, copy into offer-signed bucket and record as signed doc.
+  const onSignatureSaved = async (sig: { file_path: string; file_name: string }) => {
+    if (!user || !offer) return;
+    setUploading(true);
+    try {
+      const { data: blob, error: dErr } = await supabase.storage.from("signatures").download(sig.file_path);
+      if (dErr || !blob) throw dErr ?? new Error("Could not load signature");
+      const ext = (sig.file_name.split(".").pop() || "png").toLowerCase();
+      const nextVersion = (offer.current_version ?? 0) + 1;
+      const path = `${user.id}/${offer.id}/v${nextVersion}-esign-${Date.now()}.${ext}`;
+      const { error: upErr } = await supabase.storage.from("offer-signed").upload(path, blob, { contentType: blob.type || "image/png" });
+      if (upErr) throw upErr;
+      const { error } = await supabase.from("offer_documents").insert({
+        offer_id: offer.id,
+        kind: "signed",
+        version: nextVersion,
+        file_path: path,
+        file_name: `e-signature.${ext}`,
+        uploaded_by: user.id,
+        notes: "Inline e-signature",
+      } as any);
+      if (error) throw error;
+      toast.success("Signature applied to your offer.");
+      load();
+    } catch (e: any) {
+      toast.error(e?.message ?? "Could not apply signature");
+    } finally { setUploading(false); }
   };
 
   if (loading) {
@@ -306,10 +338,27 @@ export const OfferPanel = ({ applicationId, workflowId, applicantId, isAdmin, on
                   ? "Please upload a revised signed copy."
                   : "Awaiting admin review of your latest signed copy. You can upload a new version if needed."}
             </p>
-            <label className={`flex items-center justify-center gap-2 w-full py-5 border-2 border-dashed rounded-lg cursor-pointer hover:bg-muted/40 ${uploading ? "opacity-60 pointer-events-none" : ""}`}>
-              <input type="file" accept=".pdf,image/*" className="hidden" onChange={(e) => e.target.files?.[0] && uploadSigned(e.target.files[0])} />
-              {uploading ? <><Loader2 className="w-4 h-4 animate-spin" /> Uploading…</> : <><Upload className="w-4 h-4" /> <span className="text-sm">Upload signed copy</span></>}
-            </label>
+            <div className="grid sm:grid-cols-2 gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                className="h-auto py-4 flex flex-col gap-1"
+                onClick={() => setShowSign(true)}
+                disabled={uploading}
+              >
+                <PenLine className="w-4 h-4" />
+                <span className="text-sm font-medium">Sign inline</span>
+                <span className="text-[11px] text-muted-foreground">Draw, type or upload your signature</span>
+              </Button>
+              <label className={`flex flex-col items-center justify-center gap-1 py-4 border-2 border-dashed rounded-md cursor-pointer hover:bg-muted/40 ${uploading ? "opacity-60 pointer-events-none" : ""}`}>
+                <input type="file" accept=".pdf,image/*" className="hidden" onChange={(e) => e.target.files?.[0] && uploadSigned(e.target.files[0])} />
+                {uploading ? <><Loader2 className="w-4 h-4 animate-spin" /> Uploading…</> : <>
+                  <Upload className="w-4 h-4" />
+                  <span className="text-sm font-medium">Upload signed copy</span>
+                  <span className="text-[11px] text-muted-foreground">PDF or scanned image</span>
+                </>}
+              </label>
+            </div>
           </div>
         )}
 
@@ -361,6 +410,14 @@ export const OfferPanel = ({ applicationId, workflowId, applicantId, isAdmin, on
         open={showReject} onClose={() => setShowReject(false)}
         title="Reject offer" placeholder="Reason the offer is being rejected"
         reason={reason} setReason={setReason} onSubmit={rejectOffer} confirmLabel="Reject offer" destructive required
+      />
+      <SignaturePad
+        open={showSign}
+        onOpenChange={setShowSign}
+        context="offer"
+        applicationId={applicationId}
+        offerId={offer.id}
+        onSaved={onSignatureSaved}
       />
     </Card>
   );
