@@ -20,6 +20,7 @@ import { OfferPanel } from "@/components/OfferPanel";
 import { Sparkles, AlertCircle } from "lucide-react";
 import { AffidavitPanel } from "@/components/AffidavitPanel";
 import { BackButton } from "@/components/BackButton";
+import { EventTimeline, TimelineEvent } from "@/components/EventTimeline";
 
 const Apply = () => {
   const { slug } = useParams();
@@ -38,6 +39,7 @@ const Apply = () => {
   const [savingStatus, setSavingStatus] = useState<"idle" | "saving" | "saved">("idle");
   const [submitting, setSubmitting] = useState(false);
   const [usingCv, setUsingCv] = useState<string | null>(null);
+  const [appEvents, setAppEvents] = useState<TimelineEvent[]>([]);
 
   useEffect(() => { if (!authLoading && !user) navigate("/auth"); }, [authLoading, user, navigate]);
 
@@ -123,6 +125,14 @@ const Apply = () => {
 
       const { data: docFiles } = await supabase.from("application_documents").select("*").eq("application_id", app!.id);
       setUploadedDocs(docFiles ?? []);
+
+      const { data: evs } = await supabase
+        .from("application_events" as any)
+        .select("*")
+        .eq("application_id", app!.id)
+        .order("created_at", { ascending: true });
+      setAppEvents((evs as any[] ?? []) as TimelineEvent[]);
+
       setLoading(false);
     })();
   }, [user, slug]);
@@ -147,10 +157,20 @@ const Apply = () => {
 
     // Back-fill profile if this field maps to a profile attribute and the profile is empty for it
     const f = fields.find((x) => x.id === fieldId);
-    if (f?.profile_field && user && value && value.trim()) {
+    if (!user || !f || !value || !value.trim()) return;
+    if (f.profile_field) {
       const existing = profile?.[f.profile_field];
       if (!existing || String(existing).trim() === "") {
         supabase.from("profiles").update({ [f.profile_field]: value } as never).eq("id", user.id).then(() => setProfile((p: any) => ({ ...p, [f.profile_field]: value })));
+      }
+    } else if (f.field_key) {
+      // Dynamically extend the profile with any new admin-introduced field
+      const extra = (profile?.profile_extra as any) ?? {};
+      const entry = extra[f.field_key];
+      if (!entry || entry.value !== value || entry.label !== f.label) {
+        const nextExtra = { ...extra, [f.field_key]: { label: f.label, value, updated_at: new Date().toISOString() } };
+        supabase.from("profiles").update({ profile_extra: nextExtra } as never).eq("id", user.id)
+          .then(() => setProfile((p: any) => ({ ...p, profile_extra: nextExtra })));
       }
     }
   };
@@ -447,6 +467,14 @@ const Apply = () => {
 
         {submitted && application && user && (
           <>
+            {/* Full application timeline */}
+            <Card className="mt-6">
+              <CardHeader><CardTitle className="text-lg">Application timeline</CardTitle></CardHeader>
+              <CardContent>
+                <EventTimeline events={appEvents} filterable empty="No history yet." />
+              </CardContent>
+            </Card>
+
             {/* Official UFH document downloads */}
             <Card className="mt-6">
               <CardHeader><CardTitle className="text-lg">Official UFH documents</CardTitle></CardHeader>

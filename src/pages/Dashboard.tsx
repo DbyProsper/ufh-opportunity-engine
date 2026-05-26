@@ -9,7 +9,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Link, useNavigate } from "react-router-dom";
-import { ArrowRight, FileText, CheckCircle2, Clock, AlertCircle, User as UserIcon } from "lucide-react";
+import { ArrowRight, FileText, CheckCircle2, Clock, AlertCircle, User as UserIcon, Activity, Bell, History } from "lucide-react";
+import { formatDistanceToNow } from "date-fns";
 
 type Workflow = Tables<"workflows">;
 type Application = Tables<"applications">;
@@ -22,6 +23,10 @@ const Dashboard = () => {
   const [rules, setRules] = useState<Tables<"eligibility_rules">[]>([]);
   const [apps, setApps] = useState<Application[]>([]);
   const [loading, setLoading] = useState(true);
+  const [recentEvents, setRecentEvents] = useState<any[]>([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [auditEvents, setAuditEvents] = useState<any[]>([]);
+  const isAdmin = roles.includes("admin");
 
   useEffect(() => {
     if (!authLoading && !user) navigate("/auth");
@@ -40,9 +45,44 @@ const Dashboard = () => {
       setWorkflows(wfRes.data ?? []);
       setRules(ruleRes.data ?? []);
       setApps(appRes.data ?? []);
+
+      const appIds = (appRes.data ?? []).map((a: any) => a.id);
+      if (appIds.length) {
+        const { data: evs } = await supabase
+          .from("application_events")
+          .select("*")
+          .in("application_id", appIds)
+          .order("created_at", { ascending: false })
+          .limit(10);
+        setRecentEvents(evs ?? []);
+      }
+
+      const { count } = await supabase
+        .from("notifications")
+        .select("id", { count: "exact", head: true })
+        .eq("user_id", user.id)
+        .is("read_at", null);
+      setUnreadCount(count ?? 0);
+
+      if (roles.includes("admin")) {
+        const { data: au } = await supabase
+          .from("audit_log")
+          .select("*")
+          .order("created_at", { ascending: false })
+          .limit(8);
+        setAuditEvents(au ?? []);
+      }
+
       setLoading(false);
+
+      // Profile-first: if essential profile is empty, push to /profile
+      const p = profRes.data;
+      const essentialMissing = !p?.full_name?.trim() || !p?.phone?.trim();
+      if (essentialMissing) {
+        navigate("/profile", { replace: true });
+      }
     })();
-  }, [user]);
+  }, [user, roles, navigate]);
 
   const eligibleCount = workflows.filter(
     (w) => checkEligibility(profile, roles, w, rules.filter((r) => r.workflow_id === w.id)).eligible
@@ -104,8 +144,81 @@ const Dashboard = () => {
           <StatCard icon={FileText} label="My Applications" value={apps.length} color="primary" />
           <StatCard icon={Clock} label="In Progress" value={apps.filter(a => a.status === "draft" || a.status === "submitted" || a.status === "under_review").length} color="warning" />
           <StatCard icon={CheckCircle2} label="Approved" value={apps.filter(a => a.status === "approved").length} color="success" />
-          <StatCard icon={AlertCircle} label="Eligible" value={eligibleCount} color="accent" />
+          <Link to="/notifications" className="block">
+            <Card className="border-0 shadow-sm hover:shadow-md transition relative">
+              <CardContent className="p-4">
+                <div className={`w-9 h-9 rounded-lg bg-accent/10 text-accent flex items-center justify-center mb-2 relative`}>
+                  <Bell className="w-4 h-4" />
+                  {unreadCount > 0 && (
+                    <span className="absolute -top-1 -right-1 min-w-4 h-4 px-1 rounded-full bg-destructive text-destructive-foreground text-[10px] font-bold flex items-center justify-center">
+                      {unreadCount > 9 ? "9+" : unreadCount}
+                    </span>
+                  )}
+                </div>
+                <p className="text-2xl font-bold text-foreground">{unreadCount}</p>
+                <p className="text-xs text-muted-foreground">Unread alerts</p>
+              </CardContent>
+            </Card>
+          </Link>
         </div>
+
+        {/* Recent activity */}
+        {recentEvents.length > 0 && (
+          <section className="mb-10">
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-xl font-semibold text-foreground flex items-center gap-2"><Activity className="w-4 h-4 text-primary" /> Recent activity</h2>
+            </div>
+            <Card>
+              <CardContent className="p-0 divide-y">
+                {recentEvents.map((e) => {
+                  const app = apps.find((a) => a.id === e.application_id);
+                  const wf = workflows.find((w) => w.id === app?.workflow_id);
+                  const title = e.event_type === "status_change"
+                    ? `Status → ${(e.to_status ?? "").replace(/_/g, " ")}`
+                    : e.event_type.replace(/_/g, " ");
+                  return (
+                    <Link
+                      key={e.id}
+                      to={wf ? `/apply/${wf.slug}` : "/dashboard"}
+                      className="flex items-center justify-between p-3 hover:bg-muted/40 gap-3"
+                    >
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium capitalize truncate">{title}</p>
+                        <p className="text-xs text-muted-foreground truncate">
+                          {wf?.name ?? "Application"} · {formatDistanceToNow(new Date(e.created_at), { addSuffix: true })}
+                        </p>
+                      </div>
+                      <ArrowRight className="w-4 h-4 text-muted-foreground shrink-0" />
+                    </Link>
+                  );
+                })}
+              </CardContent>
+            </Card>
+          </section>
+        )}
+
+        {isAdmin && auditEvents.length > 0 && (
+          <section className="mb-10">
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-xl font-semibold text-foreground flex items-center gap-2"><History className="w-4 h-4 text-primary" /> Latest audit events</h2>
+              <Link to="/admin/audit" className="text-xs text-primary hover:underline">View all</Link>
+            </div>
+            <Card>
+              <CardContent className="p-0 divide-y">
+                {auditEvents.map((a) => (
+                  <div key={a.id} className="p-3 text-sm flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="font-medium truncate"><span className="uppercase text-[10px] tracking-wide text-muted-foreground mr-1.5">{a.operation}</span>{a.table_name}</p>
+                      <p className="text-xs text-muted-foreground truncate">
+                        {a.actor_email ?? "system"} · {formatDistanceToNow(new Date(a.created_at), { addSuffix: true })}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+          </section>
+        )}
 
         {/* My Applications */}
         {apps.length > 0 && (

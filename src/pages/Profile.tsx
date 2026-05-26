@@ -72,6 +72,7 @@ const ProfilePage = () => {
   const [cvParsing, setCvParsing] = useState(false);
   const [profileDocs, setProfileDocs] = useState<any[]>([]);
   const [syncing, setSyncing] = useState(false);
+  const [profileExtra, setProfileExtra] = useState<Record<string, { label: string; value: string; updated_at?: string }>>({});
 
   useEffect(() => { if (!authLoading && !user) navigate("/auth"); }, [authLoading, user, navigate]);
 
@@ -101,6 +102,7 @@ const ProfilePage = () => {
         });
         setCvPath((p as any).cv_path ?? null);
         setCvUploadedAt((p as any).cv_uploaded_at ?? null);
+        setProfileExtra(((p as any).profile_extra ?? {}) as Record<string, any>);
       }
       const aArr = (addrs as any[]) ?? [];
       const home = aArr.find((a) => a.kind === "home") ?? aArr[0];
@@ -578,6 +580,26 @@ const ProfilePage = () => {
           </SectionCard>
         </div>
 
+        {Object.keys(profileExtra).length > 0 && (
+          <Card className="mt-6">
+            <CardHeader>
+              <CardTitle className="text-base flex items-center gap-2"><Sparkles className="w-4 h-4 text-accent" /> Additional information</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-xs text-muted-foreground mb-3">
+                Extra details collected from application forms — these grow your profile so future applications auto-fill them.
+              </p>
+              <div className="grid sm:grid-cols-2 gap-3">
+                {Object.entries(profileExtra).map(([key, entry]) => (
+                  <div key={key} className="p-3 border rounded-lg bg-muted/30">
+                    <p className="text-[11px] uppercase tracking-wide text-muted-foreground">{entry.label || key}</p>
+                    <p className="text-sm font-medium break-words">{entry.value}</p>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
         {/* Saved documents */}
         <Card className="mt-6">
           <CardHeader className="flex flex-row items-center justify-between gap-2">

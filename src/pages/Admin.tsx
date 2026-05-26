@@ -15,6 +15,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { toast } from "sonner";
 import { rankApplicants } from "@/lib/eligibility";
 import { Loader2, Plus, Sparkles, Eye, Check, X, ShieldAlert, Search, Settings2, Users, GraduationCap, Stamp, UserCheck } from "lucide-react";
+import { Trash2 } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { WorkflowEditor } from "@/components/admin/WorkflowEditor";
 import { ApplicationDetail } from "@/components/admin/ApplicationDetail";
 import { OfferTemplateManager } from "@/components/admin/OfferTemplateManager";
@@ -38,6 +41,9 @@ const Admin = () => {
   const [templatesFor, setTemplatesFor] = useState<{ id: string; name: string } | null>(null);
   const [admins, setAdmins] = useState<any[]>([]);
   const [aiOpen, setAiOpen] = useState(false);
+  const [selectedAppIds, setSelectedAppIds] = useState<string[]>([]);
+  const [confirmDelete, setConfirmDelete] = useState<null | { ids: string[] }>(null);
+  const [deleting, setDeleting] = useState(false);
 
   // filters
   const [audienceTab, setAudienceTab] = useState<"all" | "student" | "staff">("all");
@@ -94,6 +100,49 @@ const Admin = () => {
       });
     }
     toast.success("Approved");
+  };
+
+  const cascadeDeleteApplications = async (ids: string[]) => {
+    // remove dependents first (RLS admin delete policies were added in migration)
+    // 1. offer_documents → offers tied to these apps
+    const { data: offerRows } = await supabase.from("offers").select("id").in("application_id", ids);
+    const offerIds = (offerRows ?? []).map((o: any) => o.id);
+    if (offerIds.length) {
+      await supabase.from("offer_documents").delete().in("offer_id", offerIds);
+      await supabase.from("offers").delete().in("id", offerIds);
+    }
+    // 2. message_threads
+    const { data: threadRows } = await supabase.from("message_threads").select("id").in("application_id", ids);
+    const threadIds = (threadRows ?? []).map((t: any) => t.id);
+    if (threadIds.length) {
+      await supabase.from("messages").delete().in("thread_id", threadIds);
+      await supabase.from("message_threads").delete().in("id", threadIds);
+    }
+    // 3. application docs/responses/affidavits
+    await supabase.from("application_documents").delete().in("application_id", ids);
+    await supabase.from("application_responses").delete().in("application_id", ids);
+    await supabase.from("affidavit_submissions").delete().in("application_id", ids);
+    // 4. applications
+    const { error } = await supabase.from("applications").delete().in("id", ids);
+    if (error) throw error;
+  };
+
+  const runDelete = async () => {
+    if (!confirmDelete) return;
+    setDeleting(true);
+    try {
+      await cascadeDeleteApplications(confirmDelete.ids);
+      setApplications((p) => p.filter((a) => !confirmDelete.ids.includes(a.id)));
+      setSelectedAppIds((p) => p.filter((id) => !confirmDelete.ids.includes(id)));
+      toast.success(`Deleted ${confirmDelete.ids.length} application${confirmDelete.ids.length === 1 ? "" : "s"}`);
+      setConfirmDelete(null);
+    } catch (e: any) {
+      toast.error(e?.message ?? "Could not delete");
+    } finally { setDeleting(false); }
+  };
+
+  const toggleSelect = (id: string) => {
+    setSelectedAppIds((p) => p.includes(id) ? p.filter((x) => x !== id) : [...p, id]);
   };
 
   const createWorkflow = async (e: React.FormEvent) => {
@@ -288,9 +337,25 @@ const Admin = () => {
             <Card>
               <CardHeader className="flex flex-row items-center justify-between">
                 <CardTitle>{filteredApps.length} {filteredApps.length === 1 ? "result" : "results"}</CardTitle>
-                <Button variant="outline" size="sm" onClick={() => { rankApplicants(applications); toast.info("AI ranking — coming soon"); }}>
-                  <Sparkles className="w-3.5 h-3.5 mr-1.5 text-accent" /> Rank Applicants
-                </Button>
+                <div className="flex items-center gap-2 flex-wrap">
+                  {filteredApps.length > 0 && (
+                    <Button size="sm" variant="outline" onClick={() => {
+                      const ids = filteredApps.map((a) => a.id);
+                      const allSelected = ids.every((id) => selectedAppIds.includes(id));
+                      setSelectedAppIds(allSelected ? selectedAppIds.filter((id) => !ids.includes(id)) : Array.from(new Set([...selectedAppIds, ...ids])));
+                    }}>
+                      {filteredApps.every((a) => selectedAppIds.includes(a.id)) ? "Clear selection" : "Select all"}
+                    </Button>
+                  )}
+                  {selectedAppIds.length > 0 && (
+                    <Button size="sm" variant="outline" className="text-destructive" onClick={() => setConfirmDelete({ ids: selectedAppIds })}>
+                      <Trash2 className="w-3.5 h-3.5 mr-1" /> Delete {selectedAppIds.length}
+                    </Button>
+                  )}
+                  <Button variant="outline" size="sm" onClick={() => { rankApplicants(applications); toast.info("AI ranking — coming soon"); }}>
+                    <Sparkles className="w-3.5 h-3.5 mr-1.5 text-accent" /> Rank Applicants
+                  </Button>
+                </div>
               </CardHeader>
               <CardContent>
                 {filteredApps.length === 0 ? (
@@ -310,6 +375,13 @@ const Admin = () => {
                            onKeyDown={(e) => { if (e.key === "Enter") setViewingApp(a.id); }}
                            className="flex items-center justify-between p-3 border rounded-lg gap-3 flex-wrap cursor-pointer hover:bg-muted/40 hover:border-primary/40 transition"
                          >
+                           <div onClick={(e) => e.stopPropagation()} className="flex items-center">
+                             <Checkbox
+                               checked={selectedAppIds.includes(a.id)}
+                               onCheckedChange={() => toggleSelect(a.id)}
+                               aria-label="Select application"
+                             />
+                           </div>
                            <div className="min-w-0 flex-1">
                              <p className="font-medium text-sm">
                                {prof?.full_name || prof?.email || "Unknown"}
@@ -331,6 +403,7 @@ const Admin = () => {
                              <Button size="sm" variant="outline" onClick={() => setViewingApp(a.id)}><Eye className="w-3.5 h-3.5" /></Button>
                              <Button size="sm" variant="outline" className="text-success" onClick={() => quickApprove(a.id)}><Check className="w-3.5 h-3.5" /></Button>
                              <Button size="sm" variant="outline" className="text-destructive" onClick={() => setViewingApp(a.id)} title="Open to add a rejection reason"><X className="w-3.5 h-3.5" /></Button>
+                             <Button size="sm" variant="outline" className="text-destructive" onClick={() => setConfirmDelete({ ids: [a.id] })} title="Delete application"><Trash2 className="w-3.5 h-3.5" /></Button>
                            </div>
                          </div>
                        );
@@ -422,6 +495,23 @@ const Admin = () => {
             onClose={() => setTemplatesFor(null)}
           />
         )}
+
+        <AlertDialog open={!!confirmDelete} onOpenChange={(o) => !o && setConfirmDelete(null)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete {confirmDelete?.ids.length} application{confirmDelete && confirmDelete.ids.length === 1 ? "" : "s"}?</AlertDialogTitle>
+              <AlertDialogDescription>
+                This permanently removes the selected application{confirmDelete && confirmDelete.ids.length === 1 ? "" : "s"}, including responses, uploaded documents, offers, affidavits and messages. This action cannot be undone.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
+              <AlertDialogAction onClick={runDelete} disabled={deleting} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                {deleting ? <Loader2 className="w-4 h-4 animate-spin" /> : "Delete"}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </main>
     </div>
   );

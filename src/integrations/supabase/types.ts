@@ -814,6 +814,7 @@ export type Database = {
           id_number: string | null
           nationality: string | null
           phone: string | null
+          profile_extra: Json
           qualification: string | null
           race: string | null
           staff_number: string | null
@@ -842,6 +843,7 @@ export type Database = {
           id_number?: string | null
           nationality?: string | null
           phone?: string | null
+          profile_extra?: Json
           qualification?: string | null
           race?: string | null
           staff_number?: string | null
@@ -870,6 +872,7 @@ export type Database = {
           id_number?: string | null
           nationality?: string | null
           phone?: string | null
+          profile_extra?: Json
           qualification?: string | null
           race?: string | null
           staff_number?: string | null
