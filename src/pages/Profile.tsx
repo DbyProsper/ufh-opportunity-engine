@@ -72,6 +72,7 @@ const ProfilePage = () => {
   const [cvParsing, setCvParsing] = useState(false);
   const [profileDocs, setProfileDocs] = useState<any[]>([]);
   const [syncing, setSyncing] = useState(false);
+  const [profileExtra, setProfileExtra] = useState<Record<string, { label: string; value: string; updated_at?: string }>>({});
 
   useEffect(() => { if (!authLoading && !user) navigate("/auth"); }, [authLoading, user, navigate]);
 
@@ -101,6 +102,7 @@ const ProfilePage = () => {
         });
         setCvPath((p as any).cv_path ?? null);
         setCvUploadedAt((p as any).cv_uploaded_at ?? null);
+        setProfileExtra(((p as any).profile_extra ?? {}) as Record<string, any>);
       }
       const aArr = (addrs as any[]) ?? [];
       const home = aArr.find((a) => a.kind === "home") ?? aArr[0];
