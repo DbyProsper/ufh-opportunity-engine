@@ -357,8 +357,50 @@ const Admin = () => {
                       <Trash2 className="w-3.5 h-3.5 mr-1" /> Delete {selectedAppIds.length}
                     </Button>
                   )}
-                  <Button variant="outline" size="sm" onClick={() => { rankApplicants(applications); toast.info("AI ranking — coming soon"); }}>
-                    <Sparkles className="w-3.5 h-3.5 mr-1.5 text-accent" /> Rank Applicants
+                  <Button
+                    variant={aiRankOn ? "default" : "outline"}
+                    size="sm"
+                    disabled={computingRank}
+                    onClick={async () => {
+                      if (aiRankOn) { setAiRankOn(false); return; }
+                      setComputingRank(true);
+                      try {
+                        // Pull required + uploaded docs for scoring
+                        const wfIds = Array.from(new Set(filteredApps.map((a) => a.workflow_id)));
+                        const appIds = filteredApps.map((a) => a.id);
+                        const [reqRes, upRes] = await Promise.all([
+                          wfIds.length ? supabase.from("workflow_documents").select("id,workflow_id,required").in("workflow_id", wfIds) : Promise.resolve({ data: [] as any[] }),
+                          appIds.length ? supabase.from("application_documents").select("application_id,document_id").in("application_id", appIds) : Promise.resolve({ data: [] as any[] }),
+                        ]);
+                        const required: Record<string, string[]> = {};
+                        ((reqRes as any).data ?? []).forEach((r: any) => {
+                          if (!r.required) return;
+                          (required[r.workflow_id] ??= []).push(r.id);
+                        });
+                        const uploaded: Record<string, string[]> = {};
+                        ((upRes as any).data ?? []).forEach((u: any) => {
+                          if (!u.document_id) return;
+                          (uploaded[u.application_id] ??= []).push(u.document_id);
+                        });
+                        const ranked = rankApplications({
+                          applications: filteredApps,
+                          profiles,
+                          workflows,
+                          uploadedDocs: uploaded,
+                          requiredDocs: required,
+                        });
+                        const map: Record<string, RankedApplication> = {};
+                        ranked.forEach((r) => { map[r.id] = r; });
+                        setRankings(map);
+                        setAiRankOn(true);
+                        toast.success(`Ranked ${ranked.length} applicants`);
+                      } catch (e: any) {
+                        toast.error(e?.message ?? "Ranking failed");
+                      } finally { setComputingRank(false); }
+                    }}
+                  >
+                    {computingRank ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5 mr-1.5 text-accent" />}
+                    {aiRankOn ? "AI ranking on" : "Sort by AI Ranking"}
                   </Button>
                 </div>
               </CardHeader>
