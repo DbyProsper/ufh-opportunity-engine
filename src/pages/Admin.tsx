@@ -409,10 +409,14 @@ const Admin = () => {
                   <p className="text-muted-foreground text-center py-8">No applications match these filters.</p>
                 ) : (
                   <div className="space-y-3">
-                     {filteredApps.map((a) => {
+                     {(aiRankOn
+                        ? [...filteredApps].sort((x, y) => (rankings[y.id]?.score ?? 0) - (rankings[x.id]?.score ?? 0))
+                        : filteredApps
+                      ).map((a) => {
                        const wf = workflows.find((w) => w.id === a.workflow_id);
                        const prof = profiles.find((p) => p.id === a.user_id);
                        const reviewer = admins.find((x) => x.id === a.reviewer_id);
+                       const rank = rankings[a.id];
                        return (
                          <div
                            key={a.id}
@@ -431,6 +435,7 @@ const Admin = () => {
                            </div>
                            <div className="min-w-0 flex-1">
                              <p className="font-medium text-sm">
+                               {aiRankOn && rank && <Badge className="mr-2 text-[10px]">#{rank.rank}</Badge>}
                                {prof?.full_name || prof?.email || "Unknown"}
                                <span className="text-muted-foreground font-normal"> — {wf?.name}</span>
                                {wf?.target_role === "staff" && <Badge variant="outline" className="ml-2 text-[10px]">Staff</Badge>}
@@ -445,8 +450,18 @@ const Admin = () => {
                                )}
                              </p>
                            </div>
+                           {aiRankOn && rank && (
+                             <Badge variant="outline" className="bg-accent/10 text-accent border-accent/30">
+                               <Sparkles className="w-3 h-3 mr-1" /> {rank.score}% match
+                             </Badge>
+                           )}
                            <Badge className={`status-${a.status.replace("_","-")} capitalize`}>{a.status.replace("_"," ")}</Badge>
                            <div className="flex gap-1.5" onClick={(e) => e.stopPropagation()}>
+                             {aiRankOn && rank && (
+                               <Button size="sm" variant="outline" onClick={() => setExplainRank({ id: a.id })} title="Explain ranking">
+                                 <Sparkles className="w-3.5 h-3.5 text-accent" />
+                               </Button>
+                             )}
                              <Button size="sm" variant="outline" onClick={() => setViewingApp(a.id)}><Eye className="w-3.5 h-3.5" /></Button>
                              <Button size="sm" variant="outline" className="text-success" onClick={() => quickApprove(a.id)}><Check className="w-3.5 h-3.5" /></Button>
                              <Button size="sm" variant="outline" className="text-destructive" onClick={() => setViewingApp(a.id)} title="Open to add a rejection reason"><X className="w-3.5 h-3.5" /></Button>
