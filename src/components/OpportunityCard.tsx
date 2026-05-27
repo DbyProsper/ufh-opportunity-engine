@@ -6,23 +6,20 @@ import { Calendar, ChevronRight, Lock, CheckCircle2 } from "lucide-react";
 import { format } from "date-fns";
 import * as Icons from "lucide-react";
 import type { LucideIcon } from "lucide-react";
+import { EligibilityExplainer } from "@/components/ai/EligibilityExplainer";
+import type { Tables } from "@/integrations/supabase/types";
 
 interface Props {
-  workflow: {
-    id: string;
-    name: string;
-    slug: string;
-    description: string | null;
-    deadline: string | null;
-    icon: string | null;
-    target_role: string;
-  };
+  workflow: Tables<"workflows">;
   eligible: boolean;
   reasons: string[];
   applicationStatus?: string | null;
+  profile?: Partial<Tables<"profiles">> | null;
+  roles?: string[];
+  rules?: Tables<"eligibility_rules">[];
 }
 
-export const OpportunityCard = ({ workflow, eligible, reasons, applicationStatus }: Props) => {
+export const OpportunityCard = ({ workflow, eligible, reasons, applicationStatus, profile, roles = [], rules = [] }: Props) => {
   const Icon = ((Icons as any)[workflow.icon || "GraduationCap"] as LucideIcon) || Icons.GraduationCap;
   const deadlinePast = workflow.deadline && new Date(workflow.deadline) < new Date();
 
@@ -55,6 +52,7 @@ export const OpportunityCard = ({ workflow, eligible, reasons, applicationStatus
                 <Lock className="w-3 h-3" /> Restricted
               </Badge>
             )}
+            <EligibilityExplainer workflow={workflow} profile={profile ?? null} roles={roles} rules={rules} />
           </div>
         </div>
 
