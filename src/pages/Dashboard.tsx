@@ -268,6 +268,9 @@ const Dashboard = () => {
                     eligible={elig.eligible}
                     reasons={elig.reasons}
                     applicationStatus={myApp?.status ?? null}
+                    profile={profile}
+                    roles={roles}
+                    rules={rules.filter((r) => r.workflow_id === wf.id)}
                   />
                 );
               })}

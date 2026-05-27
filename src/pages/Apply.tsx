@@ -21,6 +21,7 @@ import { Sparkles, AlertCircle } from "lucide-react";
 import { AffidavitPanel } from "@/components/AffidavitPanel";
 import { BackButton } from "@/components/BackButton";
 import { EventTimeline, TimelineEvent } from "@/components/EventTimeline";
+import { AIAssistantPanel } from "@/components/ai/AIAssistantPanel";
 
 const Apply = () => {
   const { slug } = useParams();
@@ -40,6 +41,7 @@ const Apply = () => {
   const [submitting, setSubmitting] = useState(false);
   const [usingCv, setUsingCv] = useState<string | null>(null);
   const [appEvents, setAppEvents] = useState<TimelineEvent[]>([]);
+  const [activeFieldId, setActiveFieldId] = useState<string | null>(null);
 
   useEffect(() => { if (!authLoading && !user) navigate("/auth"); }, [authLoading, user, navigate]);
 
@@ -343,7 +345,14 @@ const Apply = () => {
           <CardHeader><CardTitle>{isLastStep ? "Review & Documents" : steps[stepIndex]?.title}</CardTitle></CardHeader>
           <CardContent className="space-y-5">
             {!isLastStep && stepFields.map((f) => (
-              <FieldRenderer key={f.id} field={f} value={responses[f.id] || ""} onChange={(v) => updateField(f.id, v)} disabled={submitted} />
+              <FieldRenderer
+                key={f.id}
+                field={f}
+                value={responses[f.id] || ""}
+                onChange={(v) => updateField(f.id, v)}
+                disabled={submitted}
+                onFocus={() => setActiveFieldId(f.id)}
+              />
             ))}
 
             {isLastStep && (
@@ -508,6 +517,20 @@ const Apply = () => {
           </>
         )}
       </main>
+      {!submitted && (
+        <AIAssistantPanel
+          activeField={(() => {
+            const f = fields.find((x) => x.id === activeFieldId);
+            return f ? { id: f.id, label: f.label, help_text: f.help_text, type: f.type } : null;
+          })()}
+          profile={profile}
+          workflow={workflow}
+          onInsert={(id, text) => {
+            updateField(id, (responses[id] ? responses[id] + "\n\n" : "") + text);
+            toast.success("Inserted into field");
+          }}
+        />
+      )}
     </div>
   );
 };
@@ -620,8 +643,8 @@ export const UFHDocButton = ({
   );
 };
 
-const FieldRenderer = ({ field, value, onChange, disabled }: { field: any; value: string; onChange: (v: string) => void; disabled?: boolean }) => {
-  const common = { id: field.id, value, disabled, placeholder: field.placeholder ?? "" };
+const FieldRenderer = ({ field, value, onChange, disabled, onFocus }: { field: any; value: string; onChange: (v: string) => void; disabled?: boolean; onFocus?: () => void }) => {
+  const common = { id: field.id, value, disabled, placeholder: field.placeholder ?? "", onFocus };
   const opts: string[] = Array.isArray(field.options) ? field.options : [];
 
   return (

@@ -13,6 +13,7 @@ import Apply from "./pages/Apply.tsx";
 import Admin from "./pages/Admin.tsx";
 import Notifications from "./pages/Notifications.tsx";
 import AdminAudit from "./pages/AdminAudit.tsx";
+import { ChatBubble } from "./components/ai/ChatBubble";
 
 const queryClient = new QueryClient();
 
@@ -35,6 +36,7 @@ const App = () => (
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>
+          <ChatBubble />
         </BrowserRouter>
       </TooltipProvider>
     </AuthProvider>

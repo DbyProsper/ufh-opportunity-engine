@@ -13,7 +13,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { rankApplicants } from "@/lib/eligibility";
+import { rankApplications, RankedApplication } from "@/lib/ai";
+import { RankingExplainer } from "@/components/ai/RankingExplainer";
 import { Loader2, Plus, Sparkles, Eye, Check, X, ShieldAlert, Search, Settings2, Users, GraduationCap, Stamp, UserCheck } from "lucide-react";
 import { Trash2 } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -44,6 +45,10 @@ const Admin = () => {
   const [selectedAppIds, setSelectedAppIds] = useState<string[]>([]);
   const [confirmDelete, setConfirmDelete] = useState<null | { ids: string[] }>(null);
   const [deleting, setDeleting] = useState(false);
+  const [aiRankOn, setAiRankOn] = useState(false);
+  const [rankings, setRankings] = useState<Record<string, RankedApplication>>({});
+  const [explainRank, setExplainRank] = useState<{ id: string } | null>(null);
+  const [computingRank, setComputingRank] = useState(false);
 
   // filters
   const [audienceTab, setAudienceTab] = useState<"all" | "student" | "staff">("all");
@@ -352,8 +357,50 @@ const Admin = () => {
                       <Trash2 className="w-3.5 h-3.5 mr-1" /> Delete {selectedAppIds.length}
                     </Button>
                   )}
-                  <Button variant="outline" size="sm" onClick={() => { rankApplicants(applications); toast.info("AI ranking — coming soon"); }}>
-                    <Sparkles className="w-3.5 h-3.5 mr-1.5 text-accent" /> Rank Applicants
+                  <Button
+                    variant={aiRankOn ? "default" : "outline"}
+                    size="sm"
+                    disabled={computingRank}
+                    onClick={async () => {
+                      if (aiRankOn) { setAiRankOn(false); return; }
+                      setComputingRank(true);
+                      try {
+                        // Pull required + uploaded docs for scoring
+                        const wfIds = Array.from(new Set(filteredApps.map((a) => a.workflow_id)));
+                        const appIds = filteredApps.map((a) => a.id);
+                        const [reqRes, upRes] = await Promise.all([
+                          wfIds.length ? supabase.from("workflow_documents").select("id,workflow_id,required").in("workflow_id", wfIds) : Promise.resolve({ data: [] as any[] }),
+                          appIds.length ? supabase.from("application_documents").select("application_id,document_id").in("application_id", appIds) : Promise.resolve({ data: [] as any[] }),
+                        ]);
+                        const required: Record<string, string[]> = {};
+                        ((reqRes as any).data ?? []).forEach((r: any) => {
+                          if (!r.required) return;
+                          (required[r.workflow_id] ??= []).push(r.id);
+                        });
+                        const uploaded: Record<string, string[]> = {};
+                        ((upRes as any).data ?? []).forEach((u: any) => {
+                          if (!u.document_id) return;
+                          (uploaded[u.application_id] ??= []).push(u.document_id);
+                        });
+                        const ranked = rankApplications({
+                          applications: filteredApps,
+                          profiles,
+                          workflows,
+                          uploadedDocs: uploaded,
+                          requiredDocs: required,
+                        });
+                        const map: Record<string, RankedApplication> = {};
+                        ranked.forEach((r) => { map[r.id] = r; });
+                        setRankings(map);
+                        setAiRankOn(true);
+                        toast.success(`Ranked ${ranked.length} applicants`);
+                      } catch (e: any) {
+                        toast.error(e?.message ?? "Ranking failed");
+                      } finally { setComputingRank(false); }
+                    }}
+                  >
+                    {computingRank ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5 mr-1.5 text-accent" />}
+                    {aiRankOn ? "AI ranking on" : "Sort by AI Ranking"}
                   </Button>
                 </div>
               </CardHeader>
@@ -362,10 +409,14 @@ const Admin = () => {
                   <p className="text-muted-foreground text-center py-8">No applications match these filters.</p>
                 ) : (
                   <div className="space-y-3">
-                     {filteredApps.map((a) => {
+                     {(aiRankOn
+                        ? [...filteredApps].sort((x, y) => (rankings[y.id]?.score ?? 0) - (rankings[x.id]?.score ?? 0))
+                        : filteredApps
+                      ).map((a) => {
                        const wf = workflows.find((w) => w.id === a.workflow_id);
                        const prof = profiles.find((p) => p.id === a.user_id);
                        const reviewer = admins.find((x) => x.id === a.reviewer_id);
+                       const rank = rankings[a.id];
                        return (
                          <div
                            key={a.id}
@@ -384,6 +435,7 @@ const Admin = () => {
                            </div>
                            <div className="min-w-0 flex-1">
                              <p className="font-medium text-sm">
+                               {aiRankOn && rank && <Badge className="mr-2 text-[10px]">#{rank.rank}</Badge>}
                                {prof?.full_name || prof?.email || "Unknown"}
                                <span className="text-muted-foreground font-normal"> — {wf?.name}</span>
                                {wf?.target_role === "staff" && <Badge variant="outline" className="ml-2 text-[10px]">Staff</Badge>}
@@ -398,8 +450,18 @@ const Admin = () => {
                                )}
                              </p>
                            </div>
+                           {aiRankOn && rank && (
+                             <Badge variant="outline" className="bg-accent/10 text-accent border-accent/30">
+                               <Sparkles className="w-3 h-3 mr-1" /> {rank.score}% match
+                             </Badge>
+                           )}
                            <Badge className={`status-${a.status.replace("_","-")} capitalize`}>{a.status.replace("_"," ")}</Badge>
                            <div className="flex gap-1.5" onClick={(e) => e.stopPropagation()}>
+                             {aiRankOn && rank && (
+                               <Button size="sm" variant="outline" onClick={() => setExplainRank({ id: a.id })} title="Explain ranking">
+                                 <Sparkles className="w-3.5 h-3.5 text-accent" />
+                               </Button>
+                             )}
                              <Button size="sm" variant="outline" onClick={() => setViewingApp(a.id)}><Eye className="w-3.5 h-3.5" /></Button>
                              <Button size="sm" variant="outline" className="text-success" onClick={() => quickApprove(a.id)}><Check className="w-3.5 h-3.5" /></Button>
                              <Button size="sm" variant="outline" className="text-destructive" onClick={() => setViewingApp(a.id)} title="Open to add a rejection reason"><X className="w-3.5 h-3.5" /></Button>
@@ -512,6 +574,21 @@ const Admin = () => {
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
+
+        <RankingExplainer
+          open={!!explainRank}
+          onClose={() => setExplainRank(null)}
+          ranked={explainRank ? rankings[explainRank.id] ?? null : null}
+          applicantName={(() => {
+            const a = applications.find((x) => x.id === explainRank?.id);
+            const p = profiles.find((pp) => pp.id === a?.user_id);
+            return p?.full_name || p?.email || "Applicant";
+          })()}
+          workflowName={(() => {
+            const a = applications.find((x) => x.id === explainRank?.id);
+            return workflows.find((w) => w.id === a?.workflow_id)?.name ?? "";
+          })()}
+        />
       </main>
     </div>
   );
