@@ -16,7 +16,7 @@ export interface SuggestionResult {
 export async function generateSuggestion(
   field: { id?: string; label: string; help_text?: string; type?: string },
   profile: Profile | null,
-  workflow?: Pick<Workflow, "name" | "description"> | null,
+  workflow?: { name: string; description?: string | null } | null,
   opts: { regenerate?: boolean } = {}
 ): Promise<SuggestionResult> {
   const k = key(["suggest", field.label, profile?.id, workflow?.name, opts.regenerate ? Date.now() : 0]);
