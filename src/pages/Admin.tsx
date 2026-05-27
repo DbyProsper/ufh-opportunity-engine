@@ -13,7 +13,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { rankApplicants } from "@/lib/eligibility";
+import { rankApplications, RankedApplication } from "@/lib/ai";
+import { RankingExplainer } from "@/components/ai/RankingExplainer";
 import { Loader2, Plus, Sparkles, Eye, Check, X, ShieldAlert, Search, Settings2, Users, GraduationCap, Stamp, UserCheck } from "lucide-react";
 import { Trash2 } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -44,6 +45,10 @@ const Admin = () => {
   const [selectedAppIds, setSelectedAppIds] = useState<string[]>([]);
   const [confirmDelete, setConfirmDelete] = useState<null | { ids: string[] }>(null);
   const [deleting, setDeleting] = useState(false);
+  const [aiRankOn, setAiRankOn] = useState(false);
+  const [rankings, setRankings] = useState<Record<string, RankedApplication>>({});
+  const [explainRank, setExplainRank] = useState<{ id: string } | null>(null);
+  const [computingRank, setComputingRank] = useState(false);
 
   // filters
   const [audienceTab, setAudienceTab] = useState<"all" | "student" | "staff">("all");
