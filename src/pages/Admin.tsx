@@ -574,6 +574,21 @@ const Admin = () => {
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
+
+        <RankingExplainer
+          open={!!explainRank}
+          onClose={() => setExplainRank(null)}
+          ranked={explainRank ? rankings[explainRank.id] ?? null : null}
+          applicantName={(() => {
+            const a = applications.find((x) => x.id === explainRank?.id);
+            const p = profiles.find((pp) => pp.id === a?.user_id);
+            return p?.full_name || p?.email || "Applicant";
+          })()}
+          workflowName={(() => {
+            const a = applications.find((x) => x.id === explainRank?.id);
+            return workflows.find((w) => w.id === a?.workflow_id)?.name ?? "";
+          })()}
+        />
       </main>
     </div>
   );
