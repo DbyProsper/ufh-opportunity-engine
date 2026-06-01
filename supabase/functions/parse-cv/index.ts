@@ -138,7 +138,15 @@ Map faculty/department to the closest official UFH option.
 Available faculties: ${facultiesList}
 Departments by faculty:
 ${deptList}
-Leave fields blank only if truly absent. Always return cv_text containing full plain-text of the CV.`,
+Leave fields blank only if truly absent. Always return cv_text containing full plain-text of the CV.
+IMPORTANT: Extract ALL information present, not just personal details. Specifically look for and populate:
+ - home_address (line1/city/province/postal_code/country)
+ - next_of_kin (full_name, relationship, phone, email, address)
+ - employment (most recent role: employer, position, start_date, end_date, is_current)
+ - banking (bank_name, account_number, branch_code, account_type, account_holder)
+ - financial (sars_tax_number, marital_status, dependants)
+ - identity (id_number, date_of_birth, gender, nationality, home_language)
+For race, choose the closest of: Black African, Coloured, Indian/Asian, White, Other, Prefer not to say. If not stated, leave blank.`,
           },
           {
             role: "user",
