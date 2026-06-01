@@ -12,6 +12,8 @@ interface Props {
   profile: any;
   workflow: { name: string; description?: string | null } | null;
   onInsert: (fieldId: string, text: string) => void;
+  applicationId?: string;
+  currentValue?: string;
 }
 
 /**
@@ -19,11 +21,23 @@ interface Props {
  * user is currently editing and produces a real suggestion via the ai-assist
  * edge function (with rule-based fallback).
  */
-export const AIAssistantPanel = ({ activeField, profile, workflow, onInsert }: Props) => {
+export const AIAssistantPanel = ({ activeField, profile, workflow, onInsert, applicationId }: Props) => {
   const [open, setOpen] = useState(true);
   const [loading, setLoading] = useState(false);
   const [suggestion, setSuggestion] = useState<string>("");
   const [source, setSource] = useState<"ai" | "rules" | null>(null);
+
+  // Auto-save suggestion per (application, field) so it survives navigation/refresh
+  const cacheKey = (fid: string) => `ai-suggest:${applicationId ?? "app"}:${fid}`;
+  // Restore cached suggestion when active field changes
+  useState(() => {});
+  if (typeof window !== "undefined" && activeField && !suggestion) {
+    const cached = window.localStorage.getItem(cacheKey(activeField.id));
+    if (cached) {
+      // schedule to avoid setState in render
+      setTimeout(() => { setSuggestion(cached); setSource("ai"); }, 0);
+    }
+  }
 
   const generate = async (regenerate = false) => {
     if (!activeField) {
@@ -36,6 +50,7 @@ export const AIAssistantPanel = ({ activeField, profile, workflow, onInsert }: P
       const res = await generateSuggestion(activeField, profile, workflow, { regenerate });
       setSuggestion(res.text);
       setSource(res.source);
+      try { if (activeField) window.localStorage.setItem(cacheKey(activeField.id), res.text); } catch {}
     } catch (e: any) {
       toast.error(e?.message ?? "Could not generate");
     } finally {

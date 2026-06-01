@@ -696,4 +696,60 @@ const FieldRenderer = ({ field, value, onChange, disabled, onFocus }: { field: a
   );
 };
 
+const DocumentsUploader = ({
+  docs, uploadedDocs, editable, profile, onUpload, onRemove, onUseCv, usingCv,
+}: {
+  docs: any[]; uploadedDocs: any[]; editable: boolean; profile: any;
+  onUpload: (docId: string, file: File) => void;
+  onRemove: (docRow: any) => void;
+  onUseCv: (docId: string) => void;
+  usingCv: string | null;
+}) => (
+  <div className="space-y-3">
+    {docs.length === 0 && <p className="text-sm text-muted-foreground">No documents required.</p>}
+    {docs.map((d) => {
+      const uploaded = uploadedDocs.filter((u) => u.document_id === d.id);
+      return (
+        <div key={d.id} className="p-4 border rounded-lg">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="font-medium text-sm flex items-center gap-2">
+                {d.name}
+                {d.required && <Badge variant="outline" className="text-[10px]">Required</Badge>}
+              </p>
+              {d.description && <p className="text-xs text-muted-foreground mt-1">{d.description}</p>}
+            </div>
+            {editable && (
+              <label className="cursor-pointer">
+                <input type="file" className="hidden" onChange={(e) => e.target.files?.[0] && onUpload(d.id, e.target.files[0])} />
+                <span className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md border bg-background hover:bg-muted">
+                  <Upload className="w-3 h-3" /> Upload
+                </span>
+              </label>
+            )}
+          </div>
+          {editable && profile?.cv_path && /\b(cv|resume|curriculum)\b/i.test(d.name || "") && uploaded.length === 0 && (
+            <Button size="sm" variant="outline" className="mt-2" onClick={() => onUseCv(d.id)} disabled={usingCv === d.id}>
+              {usingCv === d.id ? <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" /> : <Sparkles className="w-3.5 h-3.5 mr-1 text-accent" />}
+              Use my saved CV
+            </Button>
+          )}
+          {uploaded.length > 0 && (
+            <ul className="mt-2 space-y-1">
+              {uploaded.map((u) => (
+                <li key={u.id} className="flex items-center justify-between text-xs bg-muted/40 rounded px-2 py-1">
+                  <span className="flex items-center gap-1.5"><FileText className="w-3 h-3" /> {u.file_name}</span>
+                  {editable && (
+                    <button onClick={() => onRemove(u)} className="text-destructive"><Trash2 className="w-3 h-3" /></button>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      );
+    })}
+  </div>
+);
+
 export default Apply;
