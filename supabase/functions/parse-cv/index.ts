@@ -66,9 +66,52 @@ Deno.serve(async (req) => {
             full_name: { type: "string" },
             email: { type: "string" },
             phone: { type: "string" },
+            date_of_birth: { type: "string", description: "ISO date YYYY-MM-DD if found" },
+            gender: { type: "string" },
+            id_number: { type: "string", description: "South African ID or passport number" },
+            nationality: { type: "string" },
+            home_language: { type: "string" },
+            race: { type: "string", description: "One of: Black African, Coloured, Indian/Asian, White, Other, Prefer not to say" },
+            disability: { type: "string" },
             student_number: { type: "string" },
             staff_number: { type: "string" },
             address: { type: "string" },
+            home_address: {
+              type: "object",
+              properties: {
+                line1: { type: "string" }, line2: { type: "string" },
+                city: { type: "string" }, province: { type: "string" },
+                postal_code: { type: "string" }, country: { type: "string" },
+              },
+            },
+            next_of_kin: {
+              type: "object",
+              properties: {
+                full_name: { type: "string" }, relationship: { type: "string" },
+                phone: { type: "string" }, email: { type: "string" }, address: { type: "string" },
+              },
+            },
+            employment: {
+              type: "object",
+              properties: {
+                employer: { type: "string" }, position: { type: "string" },
+                start_date: { type: "string" }, end_date: { type: "string" }, is_current: { type: "boolean" },
+              },
+            },
+            banking: {
+              type: "object",
+              properties: {
+                bank_name: { type: "string" }, branch_code: { type: "string" },
+                account_number: { type: "string" }, account_type: { type: "string" }, account_holder: { type: "string" },
+              },
+            },
+            financial: {
+              type: "object",
+              properties: {
+                sars_tax_number: { type: "string" }, income_tax_ref: { type: "string" },
+                vat_number: { type: "string" }, marital_status: { type: "string" }, dependants: { type: "number" },
+              },
+            },
             faculty: { type: "string", enum: Object.keys(UFH_FACULTIES), description: "Closest matching UFH faculty" },
             department: { type: "string", description: "Closest matching department within the chosen faculty" },
             qualification: { type: "string", description: "Current/highest qualification or programme" },
@@ -143,7 +186,11 @@ Leave fields blank only if truly absent. Always return cv_text containing full p
       cv_uploaded_at: new Date().toISOString(),
       cv_text: extracted.cv_text ?? null,
     };
-    const fillable = ["full_name", "email", "phone", "student_number", "staff_number", "address", "faculty", "department", "qualification", "year_of_study", "bio"] as const;
+    const fillable = [
+      "full_name", "email", "phone", "student_number", "staff_number", "address",
+      "faculty", "department", "qualification", "year_of_study", "bio",
+      "date_of_birth", "gender", "id_number", "nationality", "home_language", "race", "disability",
+    ] as const;
     for (const k of fillable) {
       const v = extracted[k];
       if (v && (!existing?.[k] || String(existing[k]).trim() === "")) update[k] = v;
@@ -153,7 +200,83 @@ Leave fields blank only if truly absent. Always return cv_text containing full p
 
     await admin.from("profiles").update(update).eq("id", user.id);
 
-    return new Response(JSON.stringify({ ok: true, applied: update, raw: extracted }), {
+    // Also populate related tables when AI returned structured info, without overwriting non-empty rows.
+    const counts: Record<string, number> = {};
+
+    if (extracted.home_address && Object.values(extracted.home_address).some((x: any) => x && String(x).trim())) {
+      const { data: existingAddr } = await admin.from("addresses").select("id").eq("user_id", user.id).eq("kind", "home").maybeSingle();
+      if (!existingAddr) {
+        await admin.from("addresses").insert({
+          user_id: user.id, kind: "home", is_primary: true,
+          line1: extracted.home_address.line1 ?? null,
+          line2: extracted.home_address.line2 ?? null,
+          city: extracted.home_address.city ?? null,
+          province: extracted.home_address.province ?? null,
+          postal_code: extracted.home_address.postal_code ?? null,
+          country: extracted.home_address.country ?? "South Africa",
+        });
+        counts.address = 1;
+      }
+    }
+
+    if (extracted.next_of_kin && (extracted.next_of_kin.full_name || extracted.next_of_kin.phone)) {
+      const { data: existingNok } = await admin.from("next_of_kin").select("id").eq("user_id", user.id).maybeSingle();
+      if (!existingNok) {
+        await admin.from("next_of_kin").insert({
+          user_id: user.id, is_primary: true,
+          full_name: extracted.next_of_kin.full_name ?? null,
+          relationship: extracted.next_of_kin.relationship ?? null,
+          phone: extracted.next_of_kin.phone ?? null,
+          email: extracted.next_of_kin.email ?? null,
+          address: extracted.next_of_kin.address ?? null,
+        });
+        counts.next_of_kin = 1;
+      }
+    }
+
+    if (extracted.employment && (extracted.employment.employer || extracted.employment.position)) {
+      const { data: existingEmp } = await admin.from("employment_details").select("id").eq("user_id", user.id).limit(1).maybeSingle();
+      if (!existingEmp) {
+        await admin.from("employment_details").insert({
+          user_id: user.id,
+          employer: extracted.employment.employer ?? null,
+          position: extracted.employment.position ?? null,
+          start_date: extracted.employment.start_date || null,
+          end_date: extracted.employment.end_date || null,
+          is_current: !!extracted.employment.is_current,
+        });
+        counts.employment = 1;
+      }
+    }
+
+    if (extracted.banking && (extracted.banking.bank_name || extracted.banking.account_number)) {
+      const { data: existingBank } = await admin.from("banking_details").select("id").eq("user_id", user.id).limit(1).maybeSingle();
+      if (!existingBank) {
+        await admin.from("banking_details").insert({
+          user_id: user.id, is_primary: true,
+          bank_name: extracted.banking.bank_name ?? null,
+          branch_code: extracted.banking.branch_code ?? null,
+          account_number: extracted.banking.account_number ?? null,
+          account_type: extracted.banking.account_type ?? null,
+          account_holder: extracted.banking.account_holder ?? null,
+        });
+        counts.banking = 1;
+      }
+    }
+
+    if (extracted.financial && (extracted.financial.sars_tax_number || extracted.financial.marital_status)) {
+      await admin.from("financial_profile").upsert({
+        user_id: user.id,
+        sars_tax_number: extracted.financial.sars_tax_number ?? null,
+        income_tax_ref: extracted.financial.income_tax_ref ?? null,
+        vat_number: extracted.financial.vat_number ?? null,
+        marital_status: extracted.financial.marital_status ?? null,
+        dependants: extracted.financial.dependants ?? null,
+      }, { onConflict: "user_id" });
+      counts.financial = 1;
+    }
+
+    return new Response(JSON.stringify({ ok: true, applied: update, related: counts, raw: extracted }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (e: any) {
