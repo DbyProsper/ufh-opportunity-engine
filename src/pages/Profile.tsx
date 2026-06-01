@@ -6,6 +6,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import { Loader2, Upload, FileText, Sparkles, Trash2, Eye, RefreshCcw } from "lucide-react";
 import { useNavigate } from "react-router-dom";
@@ -30,14 +31,17 @@ type Address = {
 type NextOfKin = { id?: string; full_name: string; relationship: string; phone: string; email: string; address: string };
 type Financial = { sars_tax_number: string; income_tax_ref: string; vat_number: string; dependants: string; marital_status: string };
 type Banking = { id?: string; bank_name: string; branch_code: string; account_number: string; account_type: string; account_holder: string };
-type Employment = { id?: string; employer: string; position: string; start_date: string; end_date: string; is_current: boolean; supervisor_name: string; supervisor_contact: string };
+type Employment = { id?: string; employer: string; position: string; start_date: string; end_date: string; is_current: boolean };
 
 const blankAddress = (kind: string): Address => ({
   kind, is_primary: false, line1: "", line2: "", city: "", province: "", postal_code: "", country: "South Africa",
 });
 const blankNok = (): NextOfKin => ({ full_name: "", relationship: "", phone: "", email: "", address: "" });
 const blankBanking = (): Banking => ({ bank_name: "", branch_code: "", account_number: "", account_type: "", account_holder: "" });
-const blankEmployment = (): Employment => ({ employer: "", position: "", start_date: "", end_date: "", is_current: false, supervisor_name: "", supervisor_contact: "" });
+const blankEmployment = (): Employment => ({ employer: "", position: "", start_date: "", end_date: "", is_current: false });
+
+// SA Employment Equity Act standard categories
+const RACE_OPTIONS = ["Black African", "Coloured", "Indian/Asian", "White", "Other", "Prefer not to say"];
 
 const isFilled = (v: any) => v !== undefined && v !== null && String(v).trim() !== "";
 const sectionStatus = (required: any[]): SectionStatus =>
@@ -73,6 +77,10 @@ const ProfilePage = () => {
   const [profileDocs, setProfileDocs] = useState<any[]>([]);
   const [syncing, setSyncing] = useState(false);
   const [profileExtra, setProfileExtra] = useState<Record<string, { label: string; value: string; updated_at?: string }>>({});
+  // Profile-level UI flags persisted into profile_extra.__flags
+  const [flags, setFlags] = useState<{ postal_same: boolean; nok_same: boolean; has_staff: boolean }>({
+    postal_same: false, nok_same: false, has_staff: false,
+  });
 
   useEffect(() => { if (!authLoading && !user) navigate("/auth"); }, [authLoading, user, navigate]);
 
@@ -102,7 +110,15 @@ const ProfilePage = () => {
         });
         setCvPath((p as any).cv_path ?? null);
         setCvUploadedAt((p as any).cv_uploaded_at ?? null);
-        setProfileExtra(((p as any).profile_extra ?? {}) as Record<string, any>);
+        const extra = ((p as any).profile_extra ?? {}) as Record<string, any>;
+        const f = extra.__flags ?? {};
+        setFlags({
+          postal_same: !!f.postal_same,
+          nok_same: !!f.nok_same,
+          has_staff: !!f.has_staff || !!(p as any).staff_number,
+        });
+        const { __flags, ...rest } = extra;
+        setProfileExtra(rest as Record<string, any>);
       }
       const aArr = (addrs as any[]) ?? [];
       const home = aArr.find((a) => a.kind === "home") ?? aArr[0];
@@ -225,16 +241,47 @@ const ProfilePage = () => {
   const bankStatus = useSectionAutoSave(banking, saveBanking);
   const empStatus = useSectionAutoSave(employment, saveEmployment);
 
+  // Persist UI flags to profile_extra.__flags
+  const saveFlags = async (next: typeof flags) => {
+    if (!user) return;
+    const { data } = await supabase.from("profiles").select("profile_extra").eq("id", user.id).maybeSingle();
+    const cur = ((data as any)?.profile_extra ?? {}) as Record<string, any>;
+    const merged = { ...cur, __flags: next };
+    await supabase.from("profiles").update({ profile_extra: merged } as never).eq("id", user.id);
+  };
+  const updateFlag = (key: keyof typeof flags, value: boolean) => {
+    const next = { ...flags, [key]: value };
+    setFlags(next);
+    saveFlags(next);
+    if (key === "postal_same" && value) {
+      // Copy address1 fields into address2
+      setAddress2((p) => ({ ...p, ...address1, id: p.id, kind: "postal", is_primary: false }));
+    }
+    if (key === "nok_same" && value) {
+      const composed = [address1.line1, address1.line2, address1.city, address1.province, address1.postal_code].filter(Boolean).join(", ");
+      setNok((p) => ({ ...p, address: composed }));
+    }
+    if (key === "has_staff" && !value) {
+      setPersonal((p) => ({ ...p, staff_number: "" }));
+    }
+  };
+
   // ---------- Section completeness ----------
   const personalSec = useMemo<SectionStatus>(() =>
-    sectionStatus([personal.full_name, personal.email, personal.phone, personal.id_number, personal.date_of_birth, personal.gender]),
-    [personal]);
+    sectionStatus([
+      personal.full_name, personal.email, personal.phone, personal.id_number,
+      personal.date_of_birth, personal.gender, personal.race,
+      // staff number only required if user toggled "I have a staff number"
+      ...(flags.has_staff ? [personal.staff_number] : []),
+    ]),
+    [personal, flags.has_staff]);
   const address1Sec = useMemo<SectionStatus>(() =>
     sectionStatus([address1.line1, address1.city, address1.province, address1.postal_code]),
     [address1]);
-  const address2Sec = useMemo<SectionStatus>(() =>
-    sectionStatus([address2.line1, address2.city, address2.province, address2.postal_code]),
-    [address2]);
+  const address2Sec = useMemo<SectionStatus>(() => {
+    if (flags.postal_same) return address1Sec; // mirrors home address completeness
+    return sectionStatus([address2.line1, address2.city, address2.province, address2.postal_code]);
+  }, [address2, flags.postal_same, address1Sec]);
   const nokSec = useMemo<SectionStatus>(() =>
     sectionStatus([nok.full_name, nok.relationship, nok.phone]),
     [nok]);
@@ -250,14 +297,15 @@ const ProfilePage = () => {
 
   const allSections = [
     { id: "personal", label: "Personal", status: personalSec },
-    { id: "address1", label: "Address 1", status: address1Sec },
-    { id: "address2", label: "Address 2", status: address2Sec },
+    { id: "address1", label: "Home Address", status: address1Sec },
+    { id: "address2", label: "Postal Address", status: address2Sec },
     { id: "nok", label: "Next of Kin", status: nokSec },
     { id: "sars", label: "SARS", status: finSec },
     { id: "banking", label: "Banking", status: bankSec },
     { id: "employment", label: "Employment", status: empSec },
   ] as const;
   const completedCount = allSections.filter((s) => s.status === "complete").length;
+  const completionPct = Math.round((completedCount / allSections.length) * 100);
 
   // ---------- CV handlers (preserved) ----------
   const reloadCv = async () => {
@@ -385,7 +433,7 @@ const ProfilePage = () => {
             </p>
           </div>
           <div className="text-xs px-3 py-1.5 rounded-full bg-muted border">
-            <strong>{completedCount}</strong> / {allSections.length} sections complete
+            <strong>{completedCount}</strong> / {allSections.length} sections · <strong>{completionPct}%</strong> complete
           </div>
         </div>
 
@@ -464,11 +512,26 @@ const ProfilePage = () => {
               </Field>
               <Field id="id_number" label="ID Number / Passport" value={personal.id_number} onChange={(v) => setPersonal((p) => ({ ...p, id_number: v }))} />
               <Field id="nationality" label="Nationality" value={personal.nationality} onChange={(v) => setPersonal((p) => ({ ...p, nationality: v }))} />
-              <Field id="race" label="Race" value={personal.race} onChange={(v) => setPersonal((p) => ({ ...p, race: v }))} />
-              <Field id="home_language" label="Home Language" value={personal.home_language} onChange={(v) => setPersonal((p) => ({ ...p, home_language: v }))} />
-              <Field id="disability" label="Disability (if any)" value={personal.disability} onChange={(v) => setPersonal((p) => ({ ...p, disability: v }))} placeholder="None" />
-              <Field id="student_number" label="Student Number" value={personal.student_number} onChange={(v) => setPersonal((p) => ({ ...p, student_number: v }))} />
-              <Field id="staff_number" label="Staff Number" value={personal.staff_number} onChange={(v) => setPersonal((p) => ({ ...p, staff_number: v }))} />
+              <Field id="race" label="Race (for Employment Equity reporting)" value={personal.race} onChange={(v) => setPersonal((p) => ({ ...p, race: v }))}>
+                <Select value={personal.race} onValueChange={(v) => setPersonal((p) => ({ ...p, race: v }))}>
+                  <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
+                  <SelectContent className="bg-popover z-50">
+                    {RACE_OPTIONS.map((o) => <SelectItem key={o} value={o}>{o}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </Field>
+              <Field id="home_language" label="Home Language" value={personal.home_language} onChange={(v) => setPersonal((p) => ({ ...p, home_language: v }))} placeholder="e.g. isiXhosa, English, Afrikaans" />
+              <Field id="disability" label="Disability (if any)" value={personal.disability} onChange={(v) => setPersonal((p) => ({ ...p, disability: v }))} placeholder="None, or e.g. Visual impairment" />
+              <Field id="student_number" label="Student Number" value={personal.student_number} onChange={(v) => setPersonal((p) => ({ ...p, student_number: v }))} placeholder="e.g. 202012345" />
+              <div className="sm:col-span-2 flex flex-col gap-2 p-3 border rounded-md bg-muted/30">
+                <label className="flex items-center gap-2 text-sm font-medium">
+                  <Checkbox checked={flags.has_staff} onCheckedChange={(c) => updateFlag("has_staff", !!c)} />
+                  I have a UFH staff number
+                </label>
+                {flags.has_staff && (
+                  <Field id="staff_number" label="Staff Number" value={personal.staff_number} onChange={(v) => setPersonal((p) => ({ ...p, staff_number: v }))} placeholder="e.g. S12345" />
+                )}
+              </div>
               <Field id="faculty" label="Faculty" value={personal.faculty} onChange={(v) => setPersonal((p) => ({ ...p, faculty: v, department: "" }))}>
                 <Select value={personal.faculty} onValueChange={(v) => setPersonal((p) => ({ ...p, faculty: v, department: "" }))}>
                   <SelectTrigger><SelectValue placeholder="Select faculty" /></SelectTrigger>
@@ -485,9 +548,9 @@ const ProfilePage = () => {
                   </SelectContent>
                 </Select>
               </Field>
-              <Field id="qualification" label="Qualification / Programme" value={personal.qualification} onChange={(v) => setPersonal((p) => ({ ...p, qualification: v }))} />
-              <Field id="year_of_study" label="Year of Study" value={personal.year_of_study} onChange={(v) => setPersonal((p) => ({ ...p, year_of_study: v }))} />
-              <Field id="bio" label="Short Bio" value={personal.bio} onChange={(v) => setPersonal((p) => ({ ...p, bio: v }))} textarea className="sm:col-span-2" />
+              <Field id="qualification" label="Qualification / Programme" value={personal.qualification} onChange={(v) => setPersonal((p) => ({ ...p, qualification: v }))} placeholder="e.g. BSc Computer Science" />
+              <Field id="year_of_study" label="Year of Study" value={personal.year_of_study} onChange={(v) => setPersonal((p) => ({ ...p, year_of_study: v }))} placeholder="e.g. 3rd year" />
+              <Field id="bio" label="Short Bio" value={personal.bio} onChange={(v) => setPersonal((p) => ({ ...p, bio: v }))} textarea className="sm:col-span-2" placeholder="2–3 sentences about your background, interests and goals." />
             </div>
           </SectionCard>
         </div>
@@ -499,11 +562,20 @@ const ProfilePage = () => {
           </SectionCard>
         </div>
 
-        {/* Address 2 */}
+        {/* Address 2 (Postal) */}
         <div id="address2" className="scroll-mt-24 mb-6">
-          <SectionCard title="Address 2 (Postal)" status={address2Sec} saveStatus={address2Status}
-            description="Optional — used when postal address differs from residential.">
-            <AddressFields value={address2} onChange={setAddress2} prefix="addr2" />
+          <SectionCard title="Postal Address" status={address2Sec} saveStatus={address2Status}
+            description="Used when your postal address differs from your home address.">
+            <label className="flex items-center gap-2 text-sm mb-3">
+              <Checkbox checked={flags.postal_same} onCheckedChange={(c) => updateFlag("postal_same", !!c)} />
+              Postal address is the same as my home address
+            </label>
+            {!flags.postal_same && (
+              <AddressFields value={address2} onChange={setAddress2} prefix="addr2" />
+            )}
+            {flags.postal_same && (
+              <p className="text-xs text-muted-foreground italic">Will mirror your home address — no need to re-enter.</p>
+            )}
           </SectionCard>
         </div>
 
@@ -511,11 +583,19 @@ const ProfilePage = () => {
         <div id="nok" className="scroll-mt-24 mb-6">
           <SectionCard title="Next of Kin" status={nokSec} saveStatus={nokStatus}>
             <div className="grid sm:grid-cols-2 gap-3">
-              <Field id="nok_name" label="Full Name" value={nok.full_name} onChange={(v) => setNok((p) => ({ ...p, full_name: v }))} />
-              <Field id="nok_rel" label="Relationship" value={nok.relationship} onChange={(v) => setNok((p) => ({ ...p, relationship: v }))} />
-              <Field id="nok_phone" label="Phone" type="tel" value={nok.phone} onChange={(v) => setNok((p) => ({ ...p, phone: v }))} />
-              <Field id="nok_email" label="Email" type="email" value={nok.email} onChange={(v) => setNok((p) => ({ ...p, email: v }))} />
-              <Field id="nok_addr" label="Address" value={nok.address} onChange={(v) => setNok((p) => ({ ...p, address: v }))} textarea className="sm:col-span-2" />
+              <Field id="nok_name" label="Full Name" value={nok.full_name} onChange={(v) => setNok((p) => ({ ...p, full_name: v }))} placeholder="e.g. Jane Doe" />
+              <Field id="nok_rel" label="Relationship" value={nok.relationship} onChange={(v) => setNok((p) => ({ ...p, relationship: v }))} placeholder="e.g. Mother, Spouse, Sibling" />
+              <Field id="nok_phone" label="Phone" type="tel" value={nok.phone} onChange={(v) => setNok((p) => ({ ...p, phone: v }))} placeholder="e.g. 071 234 5678" />
+              <Field id="nok_email" label="Email" type="email" value={nok.email} onChange={(v) => setNok((p) => ({ ...p, email: v }))} placeholder="e.g. jane@example.com" />
+              <div className="sm:col-span-2 space-y-2">
+                <label className="flex items-center gap-2 text-sm">
+                  <Checkbox checked={flags.nok_same} onCheckedChange={(c) => updateFlag("nok_same", !!c)} />
+                  Next of kin lives at my home address
+                </label>
+                {!flags.nok_same && (
+                  <Field id="nok_addr" label="Address" value={nok.address} onChange={(v) => setNok((p) => ({ ...p, address: v }))} textarea placeholder="Street address, city, postal code" />
+                )}
+              </div>
             </div>
           </SectionCard>
         </div>
@@ -566,12 +646,10 @@ const ProfilePage = () => {
           <SectionCard title="Employment" status={empSec} saveStatus={empStatus}
             description="Most recent or current employment. Add more roles after saving this one.">
             <div className="grid sm:grid-cols-2 gap-3">
-              <Field id="employer" label="Employer" value={employment.employer} onChange={(v) => setEmployment((p) => ({ ...p, employer: v }))} />
-              <Field id="position" label="Position" value={employment.position} onChange={(v) => setEmployment((p) => ({ ...p, position: v }))} />
+              <Field id="employer" label="Employer" value={employment.employer} onChange={(v) => setEmployment((p) => ({ ...p, employer: v }))} placeholder="e.g. University of Fort Hare" />
+              <Field id="position" label="Position" value={employment.position} onChange={(v) => setEmployment((p) => ({ ...p, position: v }))} placeholder="e.g. Tutor, Research Assistant" />
               <Field id="start_date" label="Start Date" type="date" value={employment.start_date} onChange={(v) => setEmployment((p) => ({ ...p, start_date: v }))} />
               <Field id="end_date" label="End Date" type="date" value={employment.end_date} onChange={(v) => setEmployment((p) => ({ ...p, end_date: v }))} />
-              <Field id="sup_name" label="Supervisor Name" value={employment.supervisor_name} onChange={(v) => setEmployment((p) => ({ ...p, supervisor_name: v }))} />
-              <Field id="sup_contact" label="Supervisor Contact" value={employment.supervisor_contact} onChange={(v) => setEmployment((p) => ({ ...p, supervisor_contact: v }))} />
               <label className="flex items-center gap-2 text-sm sm:col-span-2">
                 <input type="checkbox" checked={employment.is_current} onChange={(e) => setEmployment((p) => ({ ...p, is_current: e.target.checked }))} />
                 I currently work here
