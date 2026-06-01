@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -29,15 +29,30 @@ export const AIAssistantPanel = ({ activeField, profile, workflow, onInsert, app
 
   // Auto-save suggestion per (application, field) so it survives navigation/refresh
   const cacheKey = (fid: string) => `ai-suggest:${applicationId ?? "app"}:${fid}`;
-  // Restore cached suggestion when active field changes
-  useState(() => {});
-  if (typeof window !== "undefined" && activeField && !suggestion) {
-    const cached = window.localStorage.getItem(cacheKey(activeField.id));
-    if (cached) {
-      // schedule to avoid setState in render
-      setTimeout(() => { setSuggestion(cached); setSource("ai"); }, 0);
-    }
-  }
+
+  useEffect(() => {
+    if (!activeField) { setSuggestion(""); setSource(null); return; }
+    try {
+      const cached = window.localStorage.getItem(cacheKey(activeField.id));
+      if (cached) { setSuggestion(cached); setSource("ai"); }
+      else { setSuggestion(""); setSource(null); }
+    } catch {}
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeField?.id, applicationId]);
+
+  // Keyboard shortcuts: Ctrl/Cmd + G (generate), R (regenerate), I (insert)
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (!(e.ctrlKey || e.metaKey)) return;
+      const k = e.key.toLowerCase();
+      if (k === "g") { e.preventDefault(); generate(false); }
+      else if (k === "r" && suggestion) { e.preventDefault(); generate(true); }
+      else if (k === "i" && suggestion && activeField) { e.preventDefault(); onInsert(activeField.id, suggestion); }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeField?.id, suggestion]);
 
   const generate = async (regenerate = false) => {
     if (!activeField) {
