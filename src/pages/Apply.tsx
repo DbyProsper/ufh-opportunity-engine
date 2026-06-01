@@ -22,6 +22,7 @@ import { AffidavitPanel } from "@/components/AffidavitPanel";
 import { BackButton } from "@/components/BackButton";
 import { EventTimeline, TimelineEvent } from "@/components/EventTimeline";
 import { AIAssistantPanel } from "@/components/ai/AIAssistantPanel";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 
 const Apply = () => {
   const { slug } = useParams();
@@ -42,6 +43,7 @@ const Apply = () => {
   const [usingCv, setUsingCv] = useState<string | null>(null);
   const [appEvents, setAppEvents] = useState<TimelineEvent[]>([]);
   const [activeFieldId, setActiveFieldId] = useState<string | null>(null);
+  const [confirmSubmit, setConfirmSubmit] = useState(false);
 
   useEffect(() => { if (!authLoading && !user) navigate("/auth"); }, [authLoading, user, navigate]);
 
@@ -234,6 +236,15 @@ const Apply = () => {
     () => fields.filter((f) => f.step_id === steps[stepIndex]?.id),
     [fields, steps, stepIndex]
   );
+  // If the current step's title mentions "document", render the documents uploader inside that step
+  const currentStepIsDocStep = useMemo(() => {
+    const title = steps[stepIndex]?.title || "";
+    return /document/i.test(title);
+  }, [steps, stepIndex]);
+  const hasDedicatedDocStep = useMemo(
+    () => steps.some((s: any) => /document/i.test(s?.title || "")),
+    [steps]
+  );
   const isLastStep = stepIndex === steps.length;
 
   const validateAll = () => {
@@ -252,6 +263,13 @@ const Apply = () => {
       toast.error(`Missing ${missingFields.length} field(s) and ${missingDocs.length} document(s)`);
       return;
     }
+    // Final confirmation before submit
+    setConfirmSubmit(true);
+  };
+
+  const doSubmit = async () => {
+    if (!application) return;
+    setConfirmSubmit(false);
     setSubmitting(true);
     const { error } = await supabase.from("applications").update({
       status: "submitted",
@@ -355,6 +373,20 @@ const Apply = () => {
               />
             ))}
 
+            {/* If this step is the documents step, show the documents uploader inline here */}
+            {!isLastStep && currentStepIsDocStep && (
+              <DocumentsUploader
+                docs={docs}
+                uploadedDocs={uploadedDocs}
+                editable={editable}
+                profile={profile}
+                onUpload={handleFileUpload}
+                onRemove={removeDoc}
+                onUseCv={useCvForDoc}
+                usingCv={usingCv}
+              />
+            )}
+
             {isLastStep && (
               <>
                 {/* Profile snapshot */}
@@ -402,52 +434,20 @@ const Apply = () => {
 
                 <div>
                   <h3 className="font-semibold mb-3">Required Documents</h3>
-                  <div className="space-y-3">
-                    {docs.length === 0 && <p className="text-sm text-muted-foreground">No documents required.</p>}
-                    {docs.map((d) => {
-                      const uploaded = uploadedDocs.filter((u) => u.document_id === d.id);
-                      return (
-                        <div key={d.id} className="p-4 border rounded-lg">
-                          <div className="flex items-start justify-between gap-3">
-                            <div>
-                              <p className="font-medium text-sm flex items-center gap-2">
-                                {d.name}
-                                {d.required && <Badge variant="outline" className="text-[10px]">Required</Badge>}
-                              </p>
-                              {d.description && <p className="text-xs text-muted-foreground mt-1">{d.description}</p>}
-                            </div>
-                            {editable && (
-                              <label className="cursor-pointer">
-                                <input type="file" className="hidden" onChange={(e) => e.target.files?.[0] && handleFileUpload(d.id, e.target.files[0])} />
-                                <span className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md border bg-background hover:bg-muted">
-                                  <Upload className="w-3 h-3" /> Upload
-                                </span>
-                              </label>
-                            )}
-                          </div>
-                          {/* CV quick-attach if doc looks like a CV/resume */}
-                          {editable && profile?.cv_path && /\b(cv|resume|curriculum)\b/i.test(d.name || "") && uploaded.length === 0 && (
-                            <Button size="sm" variant="outline" className="mt-2" onClick={() => useCvForDoc(d.id)} disabled={usingCv === d.id}>
-                              {usingCv === d.id ? <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" /> : <Sparkles className="w-3.5 h-3.5 mr-1 text-accent" />}
-                              Use my saved CV
-                            </Button>
-                          )}
-                          {uploaded.length > 0 && (
-                            <ul className="mt-2 space-y-1">
-                              {uploaded.map((u) => (
-                                <li key={u.id} className="flex items-center justify-between text-xs bg-muted/40 rounded px-2 py-1">
-                                  <span className="flex items-center gap-1.5"><FileText className="w-3 h-3" /> {u.file_name}</span>
-                                  {editable && (
-                                    <button onClick={() => removeDoc(u)} className="text-destructive"><Trash2 className="w-3 h-3" /></button>
-                                  )}
-                                </li>
-                              ))}
-                            </ul>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
+                  {hasDedicatedDocStep ? (
+                    <p className="text-sm text-muted-foreground">Documents are uploaded in the &ldquo;Documents&rdquo; step above. {uploadedDocs.length} file(s) attached.</p>
+                  ) : (
+                    <DocumentsUploader
+                      docs={docs}
+                      uploadedDocs={uploadedDocs}
+                      editable={editable}
+                      profile={profile}
+                      onUpload={handleFileUpload}
+                      onRemove={removeDoc}
+                      onUseCv={useCvForDoc}
+                      usingCv={usingCv}
+                    />
+                  )}
                 </div>
 
                 {editable && (
@@ -484,19 +484,23 @@ const Apply = () => {
               </CardContent>
             </Card>
 
-            {/* Official UFH document downloads */}
-            <Card className="mt-6">
-              <CardHeader><CardTitle className="text-lg">Official UFH documents</CardTitle></CardHeader>
-              <CardContent className="flex flex-wrap gap-2">
-                <UFHDocButton applicationId={application.id} kind="personal_info" label="Tutor Personal Information Form" />
-                <UFHDocButton applicationId={application.id} kind="acceptance" label="Acceptance of Post" />
-              </CardContent>
-            </Card>
+            {/* Official UFH document downloads — only after admin approval and only for the Tutor workflow */}
+            {application.status === "approved" && /tutor/i.test(workflow?.slug || workflow?.name || "") && (
+              <Card className="mt-6">
+                <CardHeader><CardTitle className="text-lg">Official UFH documents</CardTitle></CardHeader>
+                <CardContent className="flex flex-wrap gap-2">
+                  <UFHDocButton applicationId={application.id} kind="personal_info" label="Tutor Personal Information Form" />
+                  <UFHDocButton applicationId={application.id} kind="acceptance" label="Acceptance of Post" />
+                </CardContent>
+              </Card>
+            )}
 
-            {/* Hybrid affidavit workflow */}
-            <div className="mt-6">
-              <AffidavitPanel applicationId={application.id} applicantId={user.id} />
-            </div>
+            {/* Hybrid affidavit workflow — only after admin approves the application */}
+            {application.status === "approved" && (
+              <div className="mt-6">
+                <AffidavitPanel applicationId={application.id} applicantId={user.id} />
+              </div>
+            )}
 
             {application.status === "approved" && (
               <div className="mt-6">
@@ -525,12 +529,31 @@ const Apply = () => {
           })()}
           profile={profile}
           workflow={workflow}
+          applicationId={application?.id}
+          currentValue={activeFieldId ? (responses[activeFieldId] || "") : ""}
           onInsert={(id, text) => {
             updateField(id, (responses[id] ? responses[id] + "\n\n" : "") + text);
             toast.success("Inserted into field");
           }}
         />
       )}
+
+      <AlertDialog open={confirmSubmit} onOpenChange={setConfirmSubmit}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Submit your application?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Please confirm all your information is correct. Once submitted, you won&apos;t be able to edit the application unless the reviewer sends it back to you.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Review again</AlertDialogCancel>
+            <AlertDialogAction onClick={doSubmit} className="btn-gradient-primary text-primary-foreground">
+              Yes, submit
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };
@@ -672,5 +695,61 @@ const FieldRenderer = ({ field, value, onChange, disabled, onFocus }: { field: a
     </div>
   );
 };
+
+const DocumentsUploader = ({
+  docs, uploadedDocs, editable, profile, onUpload, onRemove, onUseCv, usingCv,
+}: {
+  docs: any[]; uploadedDocs: any[]; editable: boolean; profile: any;
+  onUpload: (docId: string, file: File) => void;
+  onRemove: (docRow: any) => void;
+  onUseCv: (docId: string) => void;
+  usingCv: string | null;
+}) => (
+  <div className="space-y-3">
+    {docs.length === 0 && <p className="text-sm text-muted-foreground">No documents required.</p>}
+    {docs.map((d) => {
+      const uploaded = uploadedDocs.filter((u) => u.document_id === d.id);
+      return (
+        <div key={d.id} className="p-4 border rounded-lg">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="font-medium text-sm flex items-center gap-2">
+                {d.name}
+                {d.required && <Badge variant="outline" className="text-[10px]">Required</Badge>}
+              </p>
+              {d.description && <p className="text-xs text-muted-foreground mt-1">{d.description}</p>}
+            </div>
+            {editable && (
+              <label className="cursor-pointer">
+                <input type="file" className="hidden" onChange={(e) => e.target.files?.[0] && onUpload(d.id, e.target.files[0])} />
+                <span className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md border bg-background hover:bg-muted">
+                  <Upload className="w-3 h-3" /> Upload
+                </span>
+              </label>
+            )}
+          </div>
+          {editable && profile?.cv_path && /\b(cv|resume|curriculum)\b/i.test(d.name || "") && uploaded.length === 0 && (
+            <Button size="sm" variant="outline" className="mt-2" onClick={() => onUseCv(d.id)} disabled={usingCv === d.id}>
+              {usingCv === d.id ? <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" /> : <Sparkles className="w-3.5 h-3.5 mr-1 text-accent" />}
+              Use my saved CV
+            </Button>
+          )}
+          {uploaded.length > 0 && (
+            <ul className="mt-2 space-y-1">
+              {uploaded.map((u) => (
+                <li key={u.id} className="flex items-center justify-between text-xs bg-muted/40 rounded px-2 py-1">
+                  <span className="flex items-center gap-1.5"><FileText className="w-3 h-3" /> {u.file_name}</span>
+                  {editable && (
+                    <button onClick={() => onRemove(u)} className="text-destructive"><Trash2 className="w-3 h-3" /></button>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      );
+    })}
+  </div>
+);
 
 export default Apply;

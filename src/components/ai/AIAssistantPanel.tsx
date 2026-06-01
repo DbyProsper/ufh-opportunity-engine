@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -12,6 +12,8 @@ interface Props {
   profile: any;
   workflow: { name: string; description?: string | null } | null;
   onInsert: (fieldId: string, text: string) => void;
+  applicationId?: string;
+  currentValue?: string;
 }
 
 /**
@@ -19,11 +21,38 @@ interface Props {
  * user is currently editing and produces a real suggestion via the ai-assist
  * edge function (with rule-based fallback).
  */
-export const AIAssistantPanel = ({ activeField, profile, workflow, onInsert }: Props) => {
+export const AIAssistantPanel = ({ activeField, profile, workflow, onInsert, applicationId }: Props) => {
   const [open, setOpen] = useState(true);
   const [loading, setLoading] = useState(false);
   const [suggestion, setSuggestion] = useState<string>("");
   const [source, setSource] = useState<"ai" | "rules" | null>(null);
+
+  // Auto-save suggestion per (application, field) so it survives navigation/refresh
+  const cacheKey = (fid: string) => `ai-suggest:${applicationId ?? "app"}:${fid}`;
+
+  useEffect(() => {
+    if (!activeField) { setSuggestion(""); setSource(null); return; }
+    try {
+      const cached = window.localStorage.getItem(cacheKey(activeField.id));
+      if (cached) { setSuggestion(cached); setSource("ai"); }
+      else { setSuggestion(""); setSource(null); }
+    } catch {}
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeField?.id, applicationId]);
+
+  // Keyboard shortcuts: Ctrl/Cmd + G (generate), R (regenerate), I (insert)
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (!(e.ctrlKey || e.metaKey)) return;
+      const k = e.key.toLowerCase();
+      if (k === "g") { e.preventDefault(); generate(false); }
+      else if (k === "r" && suggestion) { e.preventDefault(); generate(true); }
+      else if (k === "i" && suggestion && activeField) { e.preventDefault(); onInsert(activeField.id, suggestion); }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeField?.id, suggestion]);
 
   const generate = async (regenerate = false) => {
     if (!activeField) {
@@ -36,6 +65,7 @@ export const AIAssistantPanel = ({ activeField, profile, workflow, onInsert }: P
       const res = await generateSuggestion(activeField, profile, workflow, { regenerate });
       setSuggestion(res.text);
       setSource(res.source);
+      try { if (activeField) window.localStorage.setItem(cacheKey(activeField.id), res.text); } catch {}
     } catch (e: any) {
       toast.error(e?.message ?? "Could not generate");
     } finally {

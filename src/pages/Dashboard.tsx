@@ -23,9 +23,7 @@ const Dashboard = () => {
   const [rules, setRules] = useState<Tables<"eligibility_rules">[]>([]);
   const [apps, setApps] = useState<Application[]>([]);
   const [loading, setLoading] = useState(true);
-  const [recentEvents, setRecentEvents] = useState<any[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
-  const [auditEvents, setAuditEvents] = useState<any[]>([]);
   const isAdmin = roles.includes("admin");
 
   useEffect(() => {
@@ -46,32 +44,12 @@ const Dashboard = () => {
       setRules(ruleRes.data ?? []);
       setApps(appRes.data ?? []);
 
-      const appIds = (appRes.data ?? []).map((a: any) => a.id);
-      if (appIds.length) {
-        const { data: evs } = await supabase
-          .from("application_events")
-          .select("*")
-          .in("application_id", appIds)
-          .order("created_at", { ascending: false })
-          .limit(10);
-        setRecentEvents(evs ?? []);
-      }
-
       const { count } = await supabase
         .from("notifications")
         .select("id", { count: "exact", head: true })
         .eq("user_id", user.id)
         .is("read_at", null);
       setUnreadCount(count ?? 0);
-
-      if (roles.includes("admin")) {
-        const { data: au } = await supabase
-          .from("audit_log")
-          .select("*")
-          .order("created_at", { ascending: false })
-          .limit(8);
-        setAuditEvents(au ?? []);
-      }
 
       setLoading(false);
 
@@ -88,7 +66,15 @@ const Dashboard = () => {
     (w) => checkEligibility(profile, roles, w, rules.filter((r) => r.workflow_id === w.id)).eligible
   ).length;
 
-  const profileComplete = !!(profile?.full_name && profile?.student_number && profile?.faculty && profile?.department);
+  const isStaff = roles.includes("staff");
+  const missingProfileBits: string[] = [];
+  if (!profile?.full_name) missingProfileBits.push("full name");
+  if (!profile?.phone) missingProfileBits.push("phone");
+  if (!profile?.id_number) missingProfileBits.push("ID/passport");
+  if (!profile?.faculty) missingProfileBits.push("faculty");
+  if (!profile?.department) missingProfileBits.push("department");
+  if (!isStaff && !profile?.student_number) missingProfileBits.push("student number");
+  const profileComplete = missingProfileBits.length === 0;
 
   if (loading) {
     return (
@@ -125,9 +111,9 @@ const Dashboard = () => {
                 <UserIcon className="w-5 h-5 text-accent" />
               </div>
               <div className="flex-1">
-                <h3 className="font-semibold">Complete your profile</h3>
+                <h3 className="font-semibold">Complete your profile to unlock more opportunities</h3>
                 <p className="text-sm text-muted-foreground">
-                  Add your faculty, department and student number so applications auto-fill.
+                  Still missing: {missingProfileBits.slice(0, 5).join(", ")}{missingProfileBits.length > 5 ? "…" : ""}. A complete profile is matched to more opportunities.
                 </p>
               </div>
               <Link to="/profile" className="w-full sm:w-auto">
@@ -161,64 +147,6 @@ const Dashboard = () => {
             </Card>
           </Link>
         </div>
-
-        {/* Recent activity */}
-        {recentEvents.length > 0 && (
-          <section className="mb-10">
-            <div className="flex items-center justify-between mb-3">
-              <h2 className="text-xl font-semibold text-foreground flex items-center gap-2"><Activity className="w-4 h-4 text-primary" /> Recent activity</h2>
-            </div>
-            <Card>
-              <CardContent className="p-0 divide-y">
-                {recentEvents.map((e) => {
-                  const app = apps.find((a) => a.id === e.application_id);
-                  const wf = workflows.find((w) => w.id === app?.workflow_id);
-                  const title = e.event_type === "status_change"
-                    ? `Status → ${(e.to_status ?? "").replace(/_/g, " ")}`
-                    : e.event_type.replace(/_/g, " ");
-                  return (
-                    <Link
-                      key={e.id}
-                      to={wf ? `/apply/${wf.slug}` : "/dashboard"}
-                      className="flex items-center justify-between p-3 hover:bg-muted/40 gap-3"
-                    >
-                      <div className="min-w-0">
-                        <p className="text-sm font-medium capitalize truncate">{title}</p>
-                        <p className="text-xs text-muted-foreground truncate">
-                          {wf?.name ?? "Application"} · {formatDistanceToNow(new Date(e.created_at), { addSuffix: true })}
-                        </p>
-                      </div>
-                      <ArrowRight className="w-4 h-4 text-muted-foreground shrink-0" />
-                    </Link>
-                  );
-                })}
-              </CardContent>
-            </Card>
-          </section>
-        )}
-
-        {isAdmin && auditEvents.length > 0 && (
-          <section className="mb-10">
-            <div className="flex items-center justify-between mb-3">
-              <h2 className="text-xl font-semibold text-foreground flex items-center gap-2"><History className="w-4 h-4 text-primary" /> Latest audit events</h2>
-              <Link to="/admin/audit" className="text-xs text-primary hover:underline">View all</Link>
-            </div>
-            <Card>
-              <CardContent className="p-0 divide-y">
-                {auditEvents.map((a) => (
-                  <div key={a.id} className="p-3 text-sm flex items-center justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="font-medium truncate"><span className="uppercase text-[10px] tracking-wide text-muted-foreground mr-1.5">{a.operation}</span>{a.table_name}</p>
-                      <p className="text-xs text-muted-foreground truncate">
-                        {a.actor_email ?? "system"} · {formatDistanceToNow(new Date(a.created_at), { addSuffix: true })}
-                      </p>
-                    </div>
-                  </div>
-                ))}
-              </CardContent>
-            </Card>
-          </section>
-        )}
 
         {/* My Applications */}
         {apps.length > 0 && (
