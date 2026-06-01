@@ -22,6 +22,7 @@ const signupSchema = z.object({
     .max(255)
     .refine(isUFHEmail, "Use your UFH email (@ufh.ac.za, @mail.ufh.ac.za or @live.ufh.ac.za)"),
   password: z.string().min(8, "Min 8 characters").max(72),
+  role: z.enum(["student", "staff"]),
 });
 const signinSchema = z.object({
   email: z
@@ -41,6 +42,7 @@ const Auth = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [fullName, setFullName] = useState("");
+  const [role, setRole] = useState<"student" | "staff">("student");
   const navigate = useNavigate();
   const { user } = useAuth();
 
@@ -50,7 +52,7 @@ const Auth = () => {
 
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
-    const parsed = signupSchema.safeParse({ fullName, email, password });
+    const parsed = signupSchema.safeParse({ fullName, email, password, role });
     if (!parsed.success) {
       toast.error(parsed.error.errors[0].message);
       return;
@@ -61,7 +63,7 @@ const Auth = () => {
       password: parsed.data.password,
       options: {
         emailRedirectTo: `${window.location.origin}/dashboard`,
-        data: { full_name: parsed.data.fullName },
+        data: { full_name: parsed.data.fullName, role: parsed.data.role },
       },
     });
     setLoading(false);
@@ -165,6 +167,30 @@ const Auth = () => {
                 <div className="space-y-2">
                   <Label htmlFor="signup-name">Full Name</Label>
                   <Input id="signup-name" value={fullName} onChange={(e) => setFullName(e.target.value)} required />
+                </div>
+                <div className="space-y-2">
+                  <Label>I am a…</Label>
+                  <div className="grid grid-cols-2 gap-2">
+                    {[
+                      { v: "student", label: "Student", hint: "Enrolled at UFH" },
+                      { v: "staff", label: "Staff", hint: "Employed by UFH" },
+                    ].map((opt) => (
+                      <button
+                        type="button"
+                        key={opt.v}
+                        onClick={() => setRole(opt.v as any)}
+                        className={`text-left px-3 py-2.5 rounded-md border text-sm transition ${
+                          role === opt.v
+                            ? "border-primary bg-primary/5 ring-1 ring-primary"
+                            : "border-border hover:bg-muted/40"
+                        }`}
+                      >
+                        <p className="font-medium">{opt.label}</p>
+                        <p className="text-[11px] text-muted-foreground">{opt.hint}</p>
+                      </button>
+                    ))}
+                  </div>
+                  <p className="text-[11px] text-muted-foreground">Admin access is granted by an existing administrator.</p>
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="signup-email">UFH Email</Label>
