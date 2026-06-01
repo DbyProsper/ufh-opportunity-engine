@@ -310,20 +310,53 @@ const ProfilePage = () => {
   // ---------- CV handlers (preserved) ----------
   const reloadCv = async () => {
     if (!user) return;
-    const { data: p } = await supabase.from("profiles").select("*").eq("id", user.id).maybeSingle();
-    if (!p) return;
-    setPersonal((prev) => ({
-      ...prev,
-      full_name: p.full_name ?? prev.full_name,
-      phone: p.phone ?? prev.phone,
-      faculty: p.faculty ?? prev.faculty,
-      department: p.department ?? prev.department,
-      qualification: p.qualification ?? prev.qualification,
-      year_of_study: p.year_of_study ?? prev.year_of_study,
-      bio: p.bio ?? prev.bio,
-    }));
-    setCvPath((p as any).cv_path ?? null);
-    setCvUploadedAt((p as any).cv_uploaded_at ?? null);
+    // Reload everything so AI-extracted related-table data shows up immediately.
+    const [{ data: p }, { data: addrs }, { data: noks }, { data: fin }, { data: banks }, { data: emps }] = await Promise.all([
+      supabase.from("profiles").select("*").eq("id", user.id).maybeSingle(),
+      (supabase.from as any)("addresses").select("*").eq("user_id", user.id).order("created_at"),
+      (supabase.from as any)("next_of_kin").select("*").eq("user_id", user.id).limit(1),
+      (supabase.from as any)("financial_profile").select("*").eq("user_id", user.id).maybeSingle(),
+      (supabase.from as any)("banking_details").select("*").eq("user_id", user.id).limit(1),
+      (supabase.from as any)("employment_details").select("*").eq("user_id", user.id).order("is_current", { ascending: false }).limit(1),
+    ]);
+    if (p) {
+      setPersonal((prev) => ({
+        ...prev,
+        full_name: p.full_name ?? prev.full_name,
+        phone: p.phone ?? prev.phone,
+        date_of_birth: (p as any).date_of_birth ?? prev.date_of_birth,
+        gender: (p as any).gender ?? prev.gender,
+        id_number: (p as any).id_number ?? prev.id_number,
+        nationality: (p as any).nationality ?? prev.nationality,
+        race: (p as any).race ?? prev.race,
+        home_language: (p as any).home_language ?? prev.home_language,
+        disability: (p as any).disability ?? prev.disability,
+        faculty: p.faculty ?? prev.faculty,
+        department: p.department ?? prev.department,
+        qualification: p.qualification ?? prev.qualification,
+        year_of_study: p.year_of_study ?? prev.year_of_study,
+        student_number: p.student_number ?? prev.student_number,
+        staff_number: p.staff_number ?? prev.staff_number,
+        bio: p.bio ?? prev.bio,
+      }));
+      setCvPath((p as any).cv_path ?? null);
+      setCvUploadedAt((p as any).cv_uploaded_at ?? null);
+    }
+    const home = ((addrs as any[]) ?? []).find((a) => a.kind === "home") ?? (addrs as any[])?.[0];
+    if (home) setAddress1({ ...blankAddress("home"), ...home });
+    const nArr = (noks as any[]) ?? [];
+    if (nArr[0]) setNok({ ...blankNok(), ...nArr[0] });
+    if (fin) setFinancial({
+      sars_tax_number: (fin as any).sars_tax_number ?? "",
+      income_tax_ref: (fin as any).income_tax_ref ?? "",
+      vat_number: (fin as any).vat_number ?? "",
+      dependants: (fin as any).dependants?.toString() ?? "",
+      marital_status: (fin as any).marital_status ?? "",
+    });
+    const bArr = (banks as any[]) ?? [];
+    if (bArr[0]) setBanking({ ...blankBanking(), ...bArr[0] });
+    const eArr = (emps as any[]) ?? [];
+    if (eArr[0]) setEmployment({ ...blankEmployment(), ...eArr[0], start_date: eArr[0].start_date ?? "", end_date: eArr[0].end_date ?? "" });
   };
 
   const handleCvUpload = async (file: File) => {
