@@ -114,6 +114,17 @@ Deno.serve(async (req) => {
       return Response.json({ text, source: llm ? "ai" : "rules" }, { headers: corsHeaders });
     }
 
+    if (action === "rewrite") {
+      const { field, profile, workflow, current } = payload ?? {};
+      const system = `You polish and rewrite an applicant's draft answer for a South African university opportunity application. Keep their meaning and facts. Improve clarity, tone (formal but warm), flow and grammar. First person. 2-4 sentences. Plain text only.`;
+      const user = `Field label: ${field?.label}\nField help: ${field?.help_text ?? ""}\nOpportunity: ${workflow?.name ?? ""} — ${workflow?.description ?? ""}\nApplicant profile JSON: ${JSON.stringify(profile ?? {})}\nDraft to rewrite:\n${current ?? ""}`;
+      const llm = await callLLM(system, user);
+      const text = llm ?? (current && String(current).trim().length > 0
+        ? String(current).trim()
+        : ruleSuggest(field ?? { label: "this field" }, profile ?? {}));
+      return Response.json({ text, source: llm ? "ai" : "rules" }, { headers: corsHeaders });
+    }
+
     if (action === "rank") {
       // Lightweight LLM commentary for the top candidate; main scoring is done client-side.
       const { applications } = payload ?? {};
