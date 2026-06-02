@@ -3,8 +3,8 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Sparkles, Loader2, ChevronRight, ChevronLeft, RefreshCw, Plus } from "lucide-react";
-import { generateSuggestion } from "@/lib/ai";
+import { Sparkles, Loader2, ChevronRight, ChevronLeft, RefreshCw, Plus, Wand2 } from "lucide-react";
+import { generateSuggestion, rewriteSuggestion } from "@/lib/ai";
 import { toast } from "sonner";
 
 interface Props {
@@ -21,7 +21,7 @@ interface Props {
  * user is currently editing and produces a real suggestion via the ai-assist
  * edge function (with rule-based fallback).
  */
-export const AIAssistantPanel = ({ activeField, profile, workflow, onInsert, applicationId }: Props) => {
+export const AIAssistantPanel = ({ activeField, profile, workflow, onInsert, applicationId, currentValue }: Props) => {
   const [open, setOpen] = useState(true);
   const [loading, setLoading] = useState(false);
   const [suggestion, setSuggestion] = useState<string>("");
@@ -68,6 +68,26 @@ export const AIAssistantPanel = ({ activeField, profile, workflow, onInsert, app
       try { if (activeField) window.localStorage.setItem(cacheKey(activeField.id), res.text); } catch {}
     } catch (e: any) {
       toast.error(e?.message ?? "Could not generate");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const rewrite = async () => {
+    if (!activeField) { toast.info("Click into a field first."); return; }
+    if (!currentValue || !currentValue.trim()) {
+      toast.info("Type a draft into the field first, then click Rewrite.");
+      return;
+    }
+    setLoading(true);
+    setSuggestion("");
+    try {
+      const res = await rewriteSuggestion(activeField, currentValue, profile, workflow);
+      setSuggestion(res.text);
+      setSource(res.source);
+      try { window.localStorage.setItem(cacheKey(activeField.id), res.text); } catch {}
+    } catch (e: any) {
+      toast.error(e?.message ?? "Could not rewrite");
     } finally {
       setLoading(false);
     }
@@ -147,7 +167,17 @@ export const AIAssistantPanel = ({ activeField, profile, workflow, onInsert, app
           onClick={() => generate(false)}
         >
           {loading ? <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" /> : <Sparkles className="w-3.5 h-3.5 mr-1" />}
-          Generate suggestion
+          Generate suggestion (Ctrl+G)
+        </Button>
+        <Button
+          size="sm"
+          variant="secondary"
+          className="w-full"
+          disabled={!activeField || loading || !currentValue?.trim()}
+          onClick={rewrite}
+          title="Polish my draft using my profile and the opportunity context"
+        >
+          <Wand2 className="w-3.5 h-3.5 mr-1" /> Rewrite my draft
         </Button>
         <div className="flex gap-2">
           <Button
@@ -157,7 +187,7 @@ export const AIAssistantPanel = ({ activeField, profile, workflow, onInsert, app
             disabled={!suggestion || loading}
             onClick={() => generate(true)}
           >
-            <RefreshCw className="w-3 h-3 mr-1" /> Regenerate
+            <RefreshCw className="w-3 h-3 mr-1" /> Regen (Ctrl+R)
           </Button>
           <Button
             size="sm"
@@ -166,7 +196,7 @@ export const AIAssistantPanel = ({ activeField, profile, workflow, onInsert, app
             disabled={!suggestion || !activeField}
             onClick={() => activeField && onInsert(activeField.id, suggestion)}
           >
-            <Plus className="w-3 h-3 mr-1" /> Insert
+            <Plus className="w-3 h-3 mr-1" /> Insert (Ctrl+I)
           </Button>
         </div>
       </div>
