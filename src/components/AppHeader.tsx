@@ -10,12 +10,39 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { LayoutDashboard, LogOut, Shield, User as UserIcon, Bell } from "lucide-react";
+import { LayoutDashboard, LogOut, Shield, User as UserIcon, Bell, MessageSquare } from "lucide-react";
 import { NotificationBell } from "./NotificationBell";
+import { useEffect, useState } from "react";
+import { supabase } from "@/integrations/supabase/client";
+import { Badge } from "@/components/ui/badge";
 
 export const AppHeader = () => {
   const { user, isAdmin, signOut } = useAuth();
   const navigate = useNavigate();
+  const [unreadMsgs, setUnreadMsgs] = useState(0);
+
+  useEffect(() => {
+    if (!user) { setUnreadMsgs(0); return; }
+    let active = true;
+    const load = async () => {
+      const { data: threads } = await supabase.from("message_threads").select("id");
+      const ids = (threads ?? []).map((t: any) => t.id);
+      if (!ids.length) { if (active) setUnreadMsgs(0); return; }
+      const { count } = await supabase
+        .from("messages")
+        .select("id", { count: "exact", head: true })
+        .in("thread_id", ids)
+        .neq("sender_id", user.id)
+        .is("read_at", null);
+      if (active) setUnreadMsgs(count ?? 0);
+    };
+    load();
+    const channel = supabase
+      .channel(`hdr-msgs-${user.id}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "messages" }, load)
+      .subscribe();
+    return () => { active = false; supabase.removeChannel(channel); };
+  }, [user]);
 
   const handleSignOut = async () => {
     await signOut();
@@ -43,6 +70,17 @@ export const AppHeader = () => {
           {user ? (
             <>
               <NotificationBell />
+              <Link to="/messages" className="hidden sm:inline-flex relative">
+                <Button variant="ghost" size="sm" className="gap-2">
+                  <MessageSquare className="w-4 h-4" />
+                  <span className="hidden md:inline">Messages</span>
+                </Button>
+                {unreadMsgs > 0 && (
+                  <Badge className="absolute -top-1 -right-1 h-4 min-w-4 px-1 text-[10px] flex items-center justify-center">
+                    {unreadMsgs > 9 ? "9+" : unreadMsgs}
+                  </Badge>
+                )}
+              </Link>
               <Link to="/dashboard" className="hidden sm:inline-flex">
                 <Button variant="ghost" size="sm" className="gap-2">
                   <LayoutDashboard className="w-4 h-4" />
@@ -71,6 +109,9 @@ export const AppHeader = () => {
                   </DropdownMenuItem>
                   <DropdownMenuItem asChild>
                     <Link to="/profile"><UserIcon className="w-4 h-4 mr-2" />Profile</Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link to="/messages"><MessageSquare className="w-4 h-4 mr-2" />Messages{unreadMsgs > 0 ? ` (${unreadMsgs})` : ""}</Link>
                   </DropdownMenuItem>
                   {isAdmin && (
                     <DropdownMenuItem asChild>
