@@ -35,6 +35,24 @@ export async function generateSuggestion(
   }
 }
 
+export async function rewriteSuggestion(
+  field: { id?: string; label: string; help_text?: string; type?: string },
+  current: string,
+  profile: Profile | null,
+  workflow?: { name: string; description?: string | null } | null
+): Promise<SuggestionResult> {
+  try {
+    const { data, error } = await supabase.functions.invoke("ai-assist", {
+      body: { action: "rewrite", payload: { field, profile, workflow, current } },
+    });
+    if (error) throw error;
+    return { text: (data as any).text, source: (data as any).source } as SuggestionResult;
+  } catch (e) {
+    console.error("rewriteSuggestion failed", e);
+    return { text: current?.trim() || localSuggestion(field, profile), source: "rules" };
+  }
+}
+
 function localSuggestion(field: { label: string }, profile: Profile | null): string {
   const dept = profile?.department || "your discipline";
   const qual = profile?.qualification || "your programme";
