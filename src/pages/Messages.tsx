@@ -61,7 +61,7 @@ const Messages = () => {
           : Promise.resolve({ data: [] as any[] }),
       ]);
       const apps = (appsRes as any).data ?? [];
-      const wfIds = Array.from(new Set(apps.map((a: any) => a.workflow_id)));
+      const wfIds = Array.from(new Set(apps.map((a: any) => a.workflow_id))) as string[];
       const { data: wfs } = wfIds.length
         ? await supabase.from("workflows").select("id,name").in("id", wfIds)
         : { data: [] as any[] };
