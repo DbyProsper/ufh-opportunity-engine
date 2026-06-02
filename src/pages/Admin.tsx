@@ -45,6 +45,8 @@ const Admin = () => {
   const [selectedAppIds, setSelectedAppIds] = useState<string[]>([]);
   const [confirmDelete, setConfirmDelete] = useState<null | { ids: string[] }>(null);
   const [deleting, setDeleting] = useState(false);
+  const [confirmDeleteWf, setConfirmDeleteWf] = useState<null | { id: string; name: string }>(null);
+  const [deletingWf, setDeletingWf] = useState(false);
   const [aiRankOn, setAiRankOn] = useState(false);
   const [rankings, setRankings] = useState<Record<string, RankedApplication>>({});
   const [explainRank, setExplainRank] = useState<{ id: string } | null>(null);
@@ -144,6 +146,35 @@ const Admin = () => {
     } catch (e: any) {
       toast.error(e?.message ?? "Could not delete");
     } finally { setDeleting(false); }
+  };
+
+  const runDeleteWorkflow = async () => {
+    if (!confirmDeleteWf) return;
+    const wfId = confirmDeleteWf.id;
+    setDeletingWf(true);
+    try {
+      // Cascade: applications first (which cascades to their own dependents)
+      const { data: wfApps } = await supabase.from("applications").select("id").eq("workflow_id", wfId);
+      const appIds = (wfApps ?? []).map((a: any) => a.id);
+      if (appIds.length) await cascadeDeleteApplications(appIds);
+
+      // Workflow-owned child rows
+      await supabase.from("workflow_offer_templates").delete().eq("workflow_id", wfId);
+      await supabase.from("eligibility_rules").delete().eq("workflow_id", wfId);
+      await supabase.from("workflow_documents").delete().eq("workflow_id", wfId);
+      await supabase.from("workflow_fields").delete().eq("workflow_id", wfId);
+      await supabase.from("workflow_steps").delete().eq("workflow_id", wfId);
+
+      const { error } = await supabase.from("workflows").delete().eq("id", wfId);
+      if (error) throw error;
+
+      setWorkflows((p) => p.filter((w) => w.id !== wfId));
+      setApplications((p) => p.filter((a) => a.workflow_id !== wfId));
+      toast.success(`Deleted "${confirmDeleteWf.name}"`);
+      setConfirmDeleteWf(null);
+    } catch (e: any) {
+      toast.error(e?.message ?? "Could not delete workflow");
+    } finally { setDeletingWf(false); }
   };
 
   const toggleSelect = (id: string) => {
@@ -527,6 +558,9 @@ const Admin = () => {
                          <Button size="sm" variant="outline" onClick={() => setEditingWf(w.id)}>
                            <Settings2 className="w-3.5 h-3.5 mr-1" /> Edit
                          </Button>
+                         <Button size="sm" variant="outline" className="text-destructive" onClick={() => setConfirmDeleteWf({ id: w.id, name: w.name })} title="Delete workflow">
+                           <Trash2 className="w-3.5 h-3.5" />
+                         </Button>
                        </div>
                      </div>
                   </CardContent>
@@ -570,6 +604,23 @@ const Admin = () => {
               <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
               <AlertDialogAction onClick={runDelete} disabled={deleting} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
                 {deleting ? <Loader2 className="w-4 h-4 animate-spin" /> : "Delete"}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        <AlertDialog open={!!confirmDeleteWf} onOpenChange={(o) => !o && setConfirmDeleteWf(null)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete workflow "{confirmDeleteWf?.name}"?</AlertDialogTitle>
+              <AlertDialogDescription>
+                This permanently removes the workflow along with all of its steps, fields, required documents, eligibility rules, offer templates, and every application submitted to it (including responses, uploads, offers, affidavits and messages). This cannot be undone.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={deletingWf}>Cancel</AlertDialogCancel>
+              <AlertDialogAction onClick={runDeleteWorkflow} disabled={deletingWf} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                {deletingWf ? <Loader2 className="w-4 h-4 animate-spin" /> : "Delete workflow"}
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
