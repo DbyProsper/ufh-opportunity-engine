@@ -289,6 +289,7 @@ const Admin = () => {
           <TabsList className="mb-6">
             <TabsTrigger value="applications">Applications ({applications.length})</TabsTrigger>
             <TabsTrigger value="workflows">Workflows ({workflows.length})</TabsTrigger>
+            <TabsTrigger value="access">Access</TabsTrigger>
           </TabsList>
 
           <TabsContent value="applications">
@@ -567,6 +568,10 @@ const Admin = () => {
                 </Card>
               ))}
             </div>
+          </TabsContent>
+
+          <TabsContent value="access">
+            <AdminManagement />
           </TabsContent>
         </Tabs>
 
