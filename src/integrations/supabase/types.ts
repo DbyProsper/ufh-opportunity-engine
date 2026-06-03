@@ -59,6 +59,87 @@ export type Database = {
         }
         Relationships: []
       }
+      admin_audit_logs: {
+        Row: {
+          action: string
+          actor_email: string | null
+          actor_id: string | null
+          created_at: string
+          id: string
+          metadata: Json | null
+          reason: string | null
+          role: Database["public"]["Enums"]["app_role"] | null
+          target_email: string | null
+          target_user_id: string | null
+        }
+        Insert: {
+          action: string
+          actor_email?: string | null
+          actor_id?: string | null
+          created_at?: string
+          id?: string
+          metadata?: Json | null
+          reason?: string | null
+          role?: Database["public"]["Enums"]["app_role"] | null
+          target_email?: string | null
+          target_user_id?: string | null
+        }
+        Update: {
+          action?: string
+          actor_email?: string | null
+          actor_id?: string | null
+          created_at?: string
+          id?: string
+          metadata?: Json | null
+          reason?: string | null
+          role?: Database["public"]["Enums"]["app_role"] | null
+          target_email?: string | null
+          target_user_id?: string | null
+        }
+        Relationships: []
+      }
+      admin_invites: {
+        Row: {
+          accepted_at: string | null
+          accepted_by: string | null
+          created_at: string
+          email: string
+          expires_at: string
+          id: string
+          invited_by: string
+          reason: string
+          role: Database["public"]["Enums"]["app_role"]
+          status: string
+          token: string
+        }
+        Insert: {
+          accepted_at?: string | null
+          accepted_by?: string | null
+          created_at?: string
+          email: string
+          expires_at?: string
+          id?: string
+          invited_by: string
+          reason: string
+          role: Database["public"]["Enums"]["app_role"]
+          status?: string
+          token: string
+        }
+        Update: {
+          accepted_at?: string | null
+          accepted_by?: string | null
+          created_at?: string
+          email?: string
+          expires_at?: string
+          id?: string
+          invited_by?: string
+          reason?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          status?: string
+          token?: string
+        }
+        Relationships: []
+      }
       affidavit_submissions: {
         Row: {
           admin_notes: string | null
@@ -1192,6 +1273,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      accept_admin_invite: { Args: { _token: string }; Returns: Json }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
@@ -1200,9 +1282,18 @@ export type Database = {
         Returns: boolean
       }
       is_admin: { Args: { _user_id: string }; Returns: boolean }
+      is_super_admin: { Args: { _user_id: string }; Returns: boolean }
+      revoke_admin_role: {
+        Args: {
+          _reason: string
+          _role: Database["public"]["Enums"]["app_role"]
+          _target: string
+        }
+        Returns: Json
+      }
     }
     Enums: {
-      app_role: "student" | "staff" | "admin"
+      app_role: "student" | "staff" | "admin" | "super_admin" | "reviewer"
       application_status:
         | "draft"
         | "submitted"
@@ -1360,7 +1451,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      app_role: ["student", "staff", "admin"],
+      app_role: ["student", "staff", "admin", "super_admin", "reviewer"],
       application_status: [
         "draft",
         "submitted",
