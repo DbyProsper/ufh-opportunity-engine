@@ -26,6 +26,7 @@ import { AIWorkflowDialog } from "@/components/admin/AIWorkflowDialog";
 import { BackButton } from "@/components/BackButton";
 import { History } from "lucide-react";
 import { UFH_FACULTIES, UFH_FACULTY_NAMES } from "@/data/ufh";
+import { AdminManagement } from "@/components/admin/AdminManagement";
 
 const Admin = () => {
   const { user, isAdmin, loading: authLoading } = useAuth();
@@ -289,6 +290,7 @@ const Admin = () => {
           <TabsList className="mb-6">
             <TabsTrigger value="applications">Applications ({applications.length})</TabsTrigger>
             <TabsTrigger value="workflows">Workflows ({workflows.length})</TabsTrigger>
+            <TabsTrigger value="access">Access</TabsTrigger>
           </TabsList>
 
           <TabsContent value="applications">
@@ -567,6 +569,10 @@ const Admin = () => {
                 </Card>
               ))}
             </div>
+          </TabsContent>
+
+          <TabsContent value="access">
+            <AdminManagement />
           </TabsContent>
         </Tabs>
 
