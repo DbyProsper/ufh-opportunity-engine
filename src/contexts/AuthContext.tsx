@@ -2,7 +2,7 @@ import { createContext, useContext, useEffect, useState, ReactNode } from "react
 import { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 
-export type AppRole = "student" | "staff" | "admin";
+export type AppRole = "student" | "staff" | "admin" | "super_admin" | "reviewer";
 
 interface AuthContextValue {
   user: User | null;
@@ -10,6 +10,8 @@ interface AuthContextValue {
   loading: boolean;
   roles: AppRole[];
   isAdmin: boolean;
+  isSuperAdmin: boolean;
+  isReviewer: boolean;
   isStaff: boolean;
   isStudent: boolean;
   signOut: () => Promise<void>;
@@ -70,7 +72,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         session,
         loading,
         roles,
-        isAdmin: roles.includes("admin"),
+        isAdmin: roles.includes("admin") || roles.includes("super_admin"),
+        isSuperAdmin: roles.includes("super_admin"),
+        isReviewer: roles.includes("reviewer"),
         isStaff: roles.includes("staff"),
         isStudent: roles.includes("student"),
         signOut,
