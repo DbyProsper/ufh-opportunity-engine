@@ -67,7 +67,7 @@ const ProfilePage = () => {
   const [nok, setNok] = useState<NextOfKin>(blankNok());
   const [financial, setFinancial] = useState<Financial>({ sars_tax_number: "", income_tax_ref: "", vat_number: "", dependants: "", marital_status: "" });
   const [banking, setBanking] = useState<Banking>(blankBanking());
-  const [employment, setEmployment] = useState<Employment>(blankEmployment());
+  const [employments, setEmployments] = useState<Employment[]>([blankEmployment()]);
 
   // CV / docs (kept from previous version)
   const [cvPath, setCvPath] = useState<string | null>(null);
@@ -141,11 +141,11 @@ const ProfilePage = () => {
       if (bArr[0]) setBanking({ ...blankBanking(), ...bArr[0] });
 
       const eArr = (emps as any[]) ?? [];
-      if (eArr[0]) setEmployment({
-        ...blankEmployment(), ...eArr[0],
-        start_date: eArr[0].start_date ?? "",
-        end_date: eArr[0].end_date ?? "",
-      });
+      if (eArr.length) setEmployments(eArr.map((e) => ({
+        ...blankEmployment(), ...e,
+        start_date: e.start_date ?? "",
+        end_date: e.end_date ?? "",
+      })));
 
       setProfileDocs(pd ?? []);
       setLoading(false);
@@ -215,7 +215,7 @@ const ProfilePage = () => {
     }
   };
 
-  const saveEmployment = async (v: Employment) => {
+  const saveEmploymentRow = async (idx: number, v: Employment) => {
     if (!user) return;
     const row = {
       ...v, user_id: user.id,
@@ -224,12 +224,22 @@ const ProfilePage = () => {
     };
     if (v.id) {
       const { error } = await (supabase.from as any)("employment_details").update(row).eq("id", v.id);
-      if (error) throw error;
+      if (error) toast.error(error.message); else toast.success("Employment saved");
     } else if (v.employer?.trim() || v.position?.trim()) {
       const { data, error } = await (supabase.from as any)("employment_details").insert(row).select().single();
-      if (error) throw error;
-      setEmployment((p) => ({ ...p, id: data.id }));
+      if (error) { toast.error(error.message); return; }
+      setEmployments((p) => p.map((e, i) => i === idx ? { ...e, id: data.id } : e));
+      toast.success("Employment added");
     }
+  };
+  const removeEmploymentRow = async (idx: number) => {
+    const e = employments[idx];
+    if (e?.id) {
+      const { error } = await (supabase.from as any)("employment_details").delete().eq("id", e.id);
+      if (error) { toast.error(error.message); return; }
+    }
+    setEmployments((p) => p.length === 1 ? [blankEmployment()] : p.filter((_, i) => i !== idx));
+    toast.success("Removed");
   };
 
   // ---------- Wire autosaves ----------
@@ -239,7 +249,7 @@ const ProfilePage = () => {
   const nokStatus = useSectionAutoSave(nok, saveNok);
   const finStatus = useSectionAutoSave(financial, saveFinancial);
   const bankStatus = useSectionAutoSave(banking, saveBanking);
-  const empStatus = useSectionAutoSave(employment, saveEmployment);
+  // Employments saved on demand per row (multi-employment supported)
 
   // Persist UI flags to profile_extra.__flags
   const saveFlags = async (next: typeof flags) => {
@@ -291,9 +301,11 @@ const ProfilePage = () => {
   const bankSec = useMemo<SectionStatus>(() =>
     sectionStatus([banking.bank_name, banking.account_number, banking.branch_code, banking.account_type, banking.account_holder]),
     [banking]);
-  const empSec = useMemo<SectionStatus>(() =>
-    sectionStatus([employment.employer, employment.position]),
-    [employment]);
+  const empSec = useMemo<SectionStatus>(() => {
+    const filled = employments.filter((e) => e.employer?.trim() || e.position?.trim());
+    if (filled.length === 0) return "incomplete";
+    return filled.every((e) => e.employer?.trim() && e.position?.trim()) ? "complete" : "editing";
+  }, [employments]);
 
   const allSections = [
     { id: "personal", label: "Personal", status: personalSec },
