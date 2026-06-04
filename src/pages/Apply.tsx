@@ -435,7 +435,10 @@ const Apply = () => {
                 <div>
                   <h3 className="font-semibold mb-3">Required Documents</h3>
                   {hasDedicatedDocStep ? (
-                    <p className="text-sm text-muted-foreground">Documents are uploaded in the &ldquo;Documents&rdquo; step above. {uploadedDocs.length} file(s) attached.</p>
+                    <>
+                      <p className="text-sm text-muted-foreground mb-3">Documents were uploaded in the &ldquo;Documents&rdquo; step above. Review them below before submitting.</p>
+                      <UploadedDocsReview docs={docs} uploadedDocs={uploadedDocs} />
+                    </>
                   ) : (
                     <DocumentsUploader
                       docs={docs}
