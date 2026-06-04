@@ -688,17 +688,44 @@ const ProfilePage = () => {
 
         {/* Employment */}
         <div id="employment" className="scroll-mt-24 mb-6">
-          <SectionCard title="Employment" status={empSec} saveStatus={empStatus}
-            description="Most recent or current employment. Add more roles after saving this one.">
-            <div className="grid sm:grid-cols-2 gap-3">
-              <Field id="employer" label="Employer" value={employment.employer} onChange={(v) => setEmployment((p) => ({ ...p, employer: v }))} placeholder="e.g. University of Fort Hare" />
-              <Field id="position" label="Position" value={employment.position} onChange={(v) => setEmployment((p) => ({ ...p, position: v }))} placeholder="e.g. Tutor, Research Assistant" />
-              <Field id="start_date" label="Start Date" type="date" value={employment.start_date} onChange={(v) => setEmployment((p) => ({ ...p, start_date: v }))} />
-              <Field id="end_date" label="End Date" type="date" value={employment.end_date} onChange={(v) => setEmployment((p) => ({ ...p, end_date: v }))} />
-              <label className="flex items-center gap-2 text-sm sm:col-span-2">
-                <input type="checkbox" checked={employment.is_current} onChange={(e) => setEmployment((p) => ({ ...p, is_current: e.target.checked }))} />
-                I currently work here
-              </label>
+          <SectionCard title="Employment" status={empSec}
+            description="Add every role you've held — current and previous. Each entry is saved individually.">
+            <div className="space-y-4">
+              {employments.map((emp, idx) => (
+                <div key={emp.id ?? `new-${idx}`} className="p-3 border rounded-lg space-y-3 bg-muted/20">
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs font-medium text-muted-foreground">Role #{idx + 1}{emp.is_current ? " · Current" : ""}</p>
+                    <div className="flex gap-1.5">
+                      <Button size="sm" variant="outline" onClick={() => saveEmploymentRow(idx, emp)}>Save</Button>
+                      {(employments.length > 1 || emp.id) && (
+                        <Button size="sm" variant="outline" className="text-destructive" onClick={() => removeEmploymentRow(idx)}>
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                  <div className="grid sm:grid-cols-2 gap-3">
+                    <Field id={`employer-${idx}`} label="Employer" value={emp.employer}
+                      onChange={(v) => setEmployments((p) => p.map((e, i) => i === idx ? { ...e, employer: v } : e))}
+                      placeholder="e.g. University of Fort Hare" />
+                    <Field id={`position-${idx}`} label="Position" value={emp.position}
+                      onChange={(v) => setEmployments((p) => p.map((e, i) => i === idx ? { ...e, position: v } : e))}
+                      placeholder="e.g. Tutor, Research Assistant" />
+                    <Field id={`start-${idx}`} label="Start Date" type="date" value={emp.start_date}
+                      onChange={(v) => setEmployments((p) => p.map((e, i) => i === idx ? { ...e, start_date: v } : e))} />
+                    <Field id={`end-${idx}`} label="End Date" type="date" value={emp.end_date}
+                      onChange={(v) => setEmployments((p) => p.map((e, i) => i === idx ? { ...e, end_date: v } : e))} />
+                    <label className="flex items-center gap-2 text-sm sm:col-span-2">
+                      <input type="checkbox" checked={emp.is_current}
+                        onChange={(e) => setEmployments((p) => p.map((x, i) => i === idx ? { ...x, is_current: e.target.checked } : x))} />
+                      I currently work here
+                    </label>
+                  </div>
+                </div>
+              ))}
+              <Button size="sm" variant="outline" onClick={() => setEmployments((p) => [...p, blankEmployment()])}>
+                + Add another role
+              </Button>
             </div>
           </SectionCard>
         </div>
