@@ -1339,6 +1339,7 @@ export type Database = {
         }
         Returns: Json
       }
+      withdraw_application: { Args: { _id: string }; Returns: undefined }
     }
     Enums: {
       app_role: "student" | "staff" | "admin" | "super_admin" | "reviewer"
