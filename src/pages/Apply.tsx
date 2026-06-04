@@ -756,3 +756,41 @@ const DocumentsUploader = ({
 );
 
 export default Apply;
+
+const UploadedDocsReview = ({ docs, uploadedDocs }: { docs: any[]; uploadedDocs: any[] }) => {
+  const open = async (filePath: string) => {
+    const { data, error } = await supabase.storage.from("application-documents").createSignedUrl(filePath, 60);
+    if (error || !data?.signedUrl) return toast.error(error?.message ?? "Could not open file");
+    window.open(data.signedUrl, "_blank");
+  };
+  if (docs.length === 0) return <p className="text-sm text-muted-foreground">No documents required.</p>;
+  return (
+    <div className="space-y-2">
+      {docs.map((d) => {
+        const ups = uploadedDocs.filter((u) => u.document_id === d.id);
+        return (
+          <div key={d.id} className="p-3 border rounded-lg">
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-sm font-medium">{d.name}
+                {d.required && <Badge variant="outline" className="ml-2 text-[10px]">Required</Badge>}
+              </p>
+              {ups.length === 0 && <Badge variant="outline" className="text-destructive border-destructive/40 text-[10px]">Missing</Badge>}
+            </div>
+            {ups.length > 0 && (
+              <ul className="mt-2 space-y-1">
+                {ups.map((u) => (
+                  <li key={u.id} className="flex items-center justify-between text-xs bg-muted/40 rounded px-2 py-1">
+                    <span className="flex items-center gap-1.5 min-w-0"><FileText className="w-3 h-3 shrink-0" /> <span className="truncate">{u.file_name}</span></span>
+                    <Button size="sm" variant="ghost" className="h-6 px-2" onClick={() => open(u.file_path)}>
+                      <Eye className="w-3 h-3 mr-1" /> View
+                    </Button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+};
