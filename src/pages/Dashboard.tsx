@@ -10,6 +10,9 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Link, useNavigate } from "react-router-dom";
 import { ArrowRight, FileText, CheckCircle2, Clock, AlertCircle, User as UserIcon, Activity, Bell, History } from "lucide-react";
+import { Trash2, XCircle } from "lucide-react";
+import { toast } from "sonner";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { formatDistanceToNow } from "date-fns";
 
 type Workflow = Tables<"workflows">;
@@ -24,6 +27,8 @@ const Dashboard = () => {
   const [apps, setApps] = useState<Application[]>([]);
   const [loading, setLoading] = useState(true);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [confirm, setConfirm] = useState<null | { kind: "delete" | "withdraw"; app: Application; wfName: string }>(null);
+  const [busy, setBusy] = useState(false);
   const isAdmin = roles.includes("admin");
 
   useEffect(() => {
@@ -89,6 +94,27 @@ const Dashboard = () => {
       </div>
     );
   }
+
+  const runConfirm = async () => {
+    if (!confirm) return;
+    setBusy(true);
+    try {
+      if (confirm.kind === "delete") {
+        const { error } = await supabase.from("applications").delete().eq("id", confirm.app.id);
+        if (error) throw error;
+        setApps((p) => p.filter((a) => a.id !== confirm.app.id));
+        toast.success("Draft deleted");
+      } else {
+        const { error } = await (supabase as any).rpc("withdraw_application", { _id: confirm.app.id });
+        if (error) throw error;
+        setApps((p) => p.map((a) => a.id === confirm.app.id ? { ...a, status: "withdrawn" as any } : a));
+        toast.success("Application withdrawn");
+      }
+      setConfirm(null);
+    } catch (e: any) {
+      toast.error(e?.message ?? "Action failed");
+    } finally { setBusy(false); }
+  };
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
@@ -156,10 +182,12 @@ const Dashboard = () => {
               {apps.map((app) => {
                 const wf = workflows.find((w) => w.id === app.workflow_id);
                 if (!wf) return null;
+                const canDelete = app.status === "draft";
+                const canWithdraw = ["submitted", "under_review", "changes_requested"].includes(app.status as string);
                 return (
-                  <Link key={app.id} to={`/apply/${wf.slug}`}>
-                    <Card className="hover:shadow-lg transition-all hover:-translate-y-0.5 h-full">
-                      <CardContent className="p-5">
+                  <Card key={app.id} className="hover:shadow-lg transition-all h-full flex flex-col">
+                    <CardContent className="p-5 flex-1 flex flex-col">
+                      <Link to={`/apply/${wf.slug}`} className="flex-1">
                         <div className="flex items-start justify-between gap-2 mb-2">
                           <h3 className="font-semibold leading-tight">{wf.name}</h3>
                           <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium status-${app.status.replace("_","-")}`}>
@@ -167,9 +195,25 @@ const Dashboard = () => {
                           </span>
                         </div>
                         <p className="text-xs text-muted-foreground line-clamp-2">{wf.description}</p>
-                      </CardContent>
-                    </Card>
-                  </Link>
+                      </Link>
+                      {(canDelete || canWithdraw) && (
+                        <div className="flex gap-1.5 mt-3 pt-3 border-t">
+                          {canDelete && (
+                            <Button size="sm" variant="outline" className="text-destructive flex-1"
+                              onClick={() => setConfirm({ kind: "delete", app, wfName: wf.name })}>
+                              <Trash2 className="w-3 h-3 mr-1" /> Delete draft
+                            </Button>
+                          )}
+                          {canWithdraw && (
+                            <Button size="sm" variant="outline" className="text-destructive flex-1"
+                              onClick={() => setConfirm({ kind: "withdraw", app, wfName: wf.name })}>
+                              <XCircle className="w-3 h-3 mr-1" /> Withdraw
+                            </Button>
+                          )}
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
                 );
               })}
             </div>
@@ -206,6 +250,27 @@ const Dashboard = () => {
           )}
         </section>
       </main>
+
+      <AlertDialog open={!!confirm} onOpenChange={(o) => !o && !busy && setConfirm(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {confirm?.kind === "delete" ? `Delete draft for "${confirm.wfName}"?` : `Withdraw "${confirm?.wfName}" application?`}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {confirm?.kind === "delete"
+                ? "This permanently removes your draft and any answers you've saved. This cannot be undone."
+                : "Reviewers will be notified that you have withdrawn. You can re-apply later if the workflow is still open."}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={busy}>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={runConfirm} disabled={busy} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              {confirm?.kind === "delete" ? "Delete draft" : "Withdraw"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };
