@@ -542,7 +542,23 @@ const Admin = () => {
                       <Input value={newWf.slug} onChange={(e) => setNewWf({ ...newWf, slug: e.target.value })} />
                     </div>
                     <div className="space-y-2">
-                      <Label>Description</Label>
+                      <div className="flex items-center justify-between">
+                        <Label>Description</Label>
+                        <Button type="button" size="sm" variant="ghost" onClick={async () => {
+                          if (!newWf.name) return toast.info("Add a name first");
+                          try {
+                            const { generateSuggestion } = await import("@/lib/ai");
+                            const res = await generateSuggestion(
+                              { label: "Workflow description", type: "textarea" },
+                              null,
+                              { name: newWf.name, description: newWf.description }
+                            );
+                            setNewWf((p) => ({ ...p, description: res.text }));
+                          } catch (e: any) { toast.error(e?.message ?? "AI failed"); }
+                        }}>
+                          <Sparkles className="w-3 h-3 mr-1 text-accent" /> AI assist
+                        </Button>
+                      </div>
                       <Textarea value={newWf.description} onChange={(e) => setNewWf({ ...newWf, description: e.target.value })} rows={3} />
                     </div>
                     <DialogFooter>
