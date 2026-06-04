@@ -205,8 +205,22 @@ export const WorkflowEditor = ({ workflowId, onClose }: Props) => {
               <div className="space-y-2"><Label>Slug</Label>
                 <Input defaultValue={wf.slug} onBlur={(e) => saveMeta({ slug: e.target.value })} />
               </div>
-              <div className="space-y-2 sm:col-span-2"><Label>Description</Label>
-                <Textarea defaultValue={wf.description ?? ""} rows={3} onBlur={(e) => saveMeta({ description: e.target.value })} />
+              <div className="space-y-2 sm:col-span-2">
+                <div className="flex items-center justify-between">
+                  <Label>Description</Label>
+                  <Button size="sm" variant="ghost" disabled={aiBusy === "wf-desc"}
+                    onClick={() => {
+                      const ta = document.getElementById("wf-desc-ta") as HTMLTextAreaElement | null;
+                      aiHelp("Workflow description", ta?.value ?? "", (text) => {
+                        if (ta) ta.value = text;
+                        saveMeta({ description: text });
+                      }, "wf-desc");
+                    }}>
+                    {aiBusy === "wf-desc" ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : <Sparkles className="w-3 h-3 mr-1 text-accent" />}
+                    AI assist
+                  </Button>
+                </div>
+                <Textarea id="wf-desc-ta" defaultValue={wf.description ?? ""} rows={3} onBlur={(e) => saveMeta({ description: e.target.value })} />
               </div>
               <div className="space-y-2"><Label>Target audience</Label>
                 <Select defaultValue={wf.target_role} onValueChange={(v) => saveMeta({ target_role: v })}>
