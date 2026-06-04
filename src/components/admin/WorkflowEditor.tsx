@@ -11,8 +11,9 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { ArrowDown, ArrowUp, FileText, GripVertical, Layers, ListChecks, Loader2, Plus, ScrollText, Trash2 } from "lucide-react";
+import { ArrowDown, ArrowUp, FileText, GripVertical, Layers, ListChecks, Loader2, Plus, ScrollText, Sparkles, Trash2, Wand2 } from "lucide-react";
 import { UFH_FACULTIES, UFH_FACULTY_NAMES } from "@/data/ufh";
+import { generateSuggestion, rewriteSuggestion } from "@/lib/ai";
 
 const FIELD_TYPES = ["text", "textarea", "select", "multiselect", "date", "file", "number", "email", "phone"] as const;
 const PROFILE_FIELDS = ["full_name", "email", "phone", "student_number", "staff_number", "faculty", "department", "qualification", "year_of_study", "address", "bio"];
@@ -29,6 +30,24 @@ export const WorkflowEditor = ({ workflowId, onClose }: Props) => {
   const [fields, setFields] = useState<any[]>([]);
   const [docs, setDocs] = useState<any[]>([]);
   const [rules, setRules] = useState<any[]>([]);
+  const [aiBusy, setAiBusy] = useState<string | null>(null);
+
+  const aiHelp = async (label: string, current: string, onResult: (text: string) => void, key: string) => {
+    setAiBusy(key);
+    try {
+      const field = { id: key, label, type: "textarea" };
+      const ctxWorkflow = { name: wf?.name ?? "Workflow", description: wf?.description ?? "" };
+      const res = current?.trim()
+        ? await rewriteSuggestion(field, current, null, ctxWorkflow as any)
+        : await generateSuggestion(field, null, ctxWorkflow as any, { regenerate: false });
+      if (res?.text) {
+        onResult(res.text);
+        toast.success(current?.trim() ? "Rewritten with AI" : "AI suggestion inserted");
+      }
+    } catch (e: any) {
+      toast.error(e?.message ?? "AI assist failed");
+    } finally { setAiBusy(null); }
+  };
 
   const load = async () => {
     const [wfR, sR, fR, dR, rR] = await Promise.all([
@@ -186,8 +205,22 @@ export const WorkflowEditor = ({ workflowId, onClose }: Props) => {
               <div className="space-y-2"><Label>Slug</Label>
                 <Input defaultValue={wf.slug} onBlur={(e) => saveMeta({ slug: e.target.value })} />
               </div>
-              <div className="space-y-2 sm:col-span-2"><Label>Description</Label>
-                <Textarea defaultValue={wf.description ?? ""} rows={3} onBlur={(e) => saveMeta({ description: e.target.value })} />
+              <div className="space-y-2 sm:col-span-2">
+                <div className="flex items-center justify-between">
+                  <Label>Description</Label>
+                  <Button size="sm" variant="ghost" disabled={aiBusy === "wf-desc"}
+                    onClick={() => {
+                      const ta = document.getElementById("wf-desc-ta") as HTMLTextAreaElement | null;
+                      aiHelp("Workflow description", ta?.value ?? "", (text) => {
+                        if (ta) ta.value = text;
+                        saveMeta({ description: text });
+                      }, "wf-desc");
+                    }}>
+                    {aiBusy === "wf-desc" ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : <Sparkles className="w-3 h-3 mr-1 text-accent" />}
+                    AI assist
+                  </Button>
+                </div>
+                <Textarea id="wf-desc-ta" defaultValue={wf.description ?? ""} rows={3} onBlur={(e) => saveMeta({ description: e.target.value })} />
               </div>
               <div className="space-y-2"><Label>Target audience</Label>
                 <Select defaultValue={wf.target_role} onValueChange={(v) => saveMeta({ target_role: v })}>

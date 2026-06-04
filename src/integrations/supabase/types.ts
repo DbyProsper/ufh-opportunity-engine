@@ -527,6 +527,54 @@ export type Database = {
         }
         Relationships: []
       }
+      external_opportunities: {
+        Row: {
+          confidence: number | null
+          created_at: string
+          created_by: string | null
+          deadline: string | null
+          description: string | null
+          external_link: string | null
+          id: string
+          organization: string | null
+          requirements: string | null
+          source: string | null
+          status: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          confidence?: number | null
+          created_at?: string
+          created_by?: string | null
+          deadline?: string | null
+          description?: string | null
+          external_link?: string | null
+          id?: string
+          organization?: string | null
+          requirements?: string | null
+          source?: string | null
+          status?: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          confidence?: number | null
+          created_at?: string
+          created_by?: string | null
+          deadline?: string | null
+          description?: string | null
+          external_link?: string | null
+          id?: string
+          organization?: string | null
+          requirements?: string | null
+          source?: string | null
+          status?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       financial_profile: {
         Row: {
           created_at: string
@@ -1291,6 +1339,7 @@ export type Database = {
         }
         Returns: Json
       }
+      withdraw_application: { Args: { _id: string }; Returns: undefined }
     }
     Enums: {
       app_role: "student" | "staff" | "admin" | "super_admin" | "reviewer"
