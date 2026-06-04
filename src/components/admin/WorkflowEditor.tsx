@@ -11,8 +11,9 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { ArrowDown, ArrowUp, FileText, GripVertical, Layers, ListChecks, Loader2, Plus, ScrollText, Trash2 } from "lucide-react";
+import { ArrowDown, ArrowUp, FileText, GripVertical, Layers, ListChecks, Loader2, Plus, ScrollText, Sparkles, Trash2, Wand2 } from "lucide-react";
 import { UFH_FACULTIES, UFH_FACULTY_NAMES } from "@/data/ufh";
+import { generateSuggestion, rewriteSuggestion } from "@/lib/ai";
 
 const FIELD_TYPES = ["text", "textarea", "select", "multiselect", "date", "file", "number", "email", "phone"] as const;
 const PROFILE_FIELDS = ["full_name", "email", "phone", "student_number", "staff_number", "faculty", "department", "qualification", "year_of_study", "address", "bio"];
@@ -29,6 +30,24 @@ export const WorkflowEditor = ({ workflowId, onClose }: Props) => {
   const [fields, setFields] = useState<any[]>([]);
   const [docs, setDocs] = useState<any[]>([]);
   const [rules, setRules] = useState<any[]>([]);
+  const [aiBusy, setAiBusy] = useState<string | null>(null);
+
+  const aiHelp = async (label: string, current: string, onResult: (text: string) => void, key: string) => {
+    setAiBusy(key);
+    try {
+      const field = { id: key, label, type: "textarea" };
+      const ctxWorkflow = { name: wf?.name ?? "Workflow", description: wf?.description ?? "" };
+      const res = current?.trim()
+        ? await rewriteSuggestion(field, current, null, ctxWorkflow as any)
+        : await generateSuggestion(field, null, ctxWorkflow as any, { regenerate: false });
+      if (res?.text) {
+        onResult(res.text);
+        toast.success(current?.trim() ? "Rewritten with AI" : "AI suggestion inserted");
+      }
+    } catch (e: any) {
+      toast.error(e?.message ?? "AI assist failed");
+    } finally { setAiBusy(null); }
+  };
 
   const load = async () => {
     const [wfR, sR, fR, dR, rR] = await Promise.all([
