@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -163,8 +163,8 @@ Include the standard personal/identity/academic/address fields plus any extra st
                 </TableHeader>
                 <TableBody>
                   {opps.map((o, i) => (
-                    <>
-                      <TableRow key={i} className={o._state === "discarded" ? "opacity-40" : ""}>
+                    <Fragment key={i}>
+                      <TableRow className={o._state === "discarded" ? "opacity-40" : ""}>
                         <TableCell className="font-medium max-w-md">
                           <div className="truncate">{o.title}</div>
                           {o.organization && <div className="text-[11px] text-muted-foreground truncate">{o.organization}</div>}
@@ -200,7 +200,7 @@ Include the standard personal/identity/academic/address fields plus any extra st
                         </TableCell>
                       </TableRow>
                       {editingIdx === i && o._state !== "saved" && o._state !== "discarded" && (
-                        <TableRow key={`${i}-edit`}>
+                        <TableRow>
                           <TableCell colSpan={4} className="bg-muted/30">
                             <div className="grid sm:grid-cols-2 gap-3 p-2">
                               <div className="space-y-1"><Label className="text-xs">Title</Label>
@@ -219,7 +219,7 @@ Include the standard personal/identity/academic/address fields plus any extra st
                           </TableCell>
                         </TableRow>
                       )}
-                    </>
+                    </Fragment>
                   ))}
                 </TableBody>
               </Table>
