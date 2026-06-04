@@ -23,8 +23,9 @@ import { WorkflowEditor } from "@/components/admin/WorkflowEditor";
 import { ApplicationDetail } from "@/components/admin/ApplicationDetail";
 import { OfferTemplateManager } from "@/components/admin/OfferTemplateManager";
 import { AIWorkflowDialog } from "@/components/admin/AIWorkflowDialog";
+import { BulletinExtractor } from "@/components/admin/BulletinExtractor";
 import { BackButton } from "@/components/BackButton";
-import { History } from "lucide-react";
+import { History, FileSearch } from "lucide-react";
 import { UFH_FACULTIES, UFH_FACULTY_NAMES } from "@/data/ufh";
 import { AdminManagement } from "@/components/admin/AdminManagement";
 
@@ -43,6 +44,7 @@ const Admin = () => {
   const [templatesFor, setTemplatesFor] = useState<{ id: string; name: string } | null>(null);
   const [admins, setAdmins] = useState<any[]>([]);
   const [aiOpen, setAiOpen] = useState(false);
+  const [bulletinOpen, setBulletinOpen] = useState(false);
   const [selectedAppIds, setSelectedAppIds] = useState<string[]>([]);
   const [confirmDelete, setConfirmDelete] = useState<null | { ids: string[] }>(null);
   const [deleting, setDeleting] = useState(false);
@@ -273,6 +275,9 @@ const Admin = () => {
             <p className="text-muted-foreground text-sm">Manage workflows and review applications.</p>
           </div>
           <div className="flex items-center gap-2">
+            <Button size="sm" variant="outline" onClick={() => setBulletinOpen(true)}>
+              <FileSearch className="w-3.5 h-3.5 mr-1 text-accent" /> Extract from Daily Bulletin
+            </Button>
             <Button size="sm" variant="outline" onClick={() => setAiOpen(true)}>
               <Sparkles className="w-3.5 h-3.5 mr-1 text-accent" /> AI workflow
             </Button>
@@ -284,6 +289,15 @@ const Admin = () => {
           open={aiOpen}
           onClose={() => setAiOpen(false)}
           onCreated={(wf) => { setWorkflows((p) => [wf, ...p]); setEditingWf(wf.id); setTab("workflows"); }}
+        />
+
+        <BulletinExtractor
+          open={bulletinOpen}
+          onClose={() => setBulletinOpen(false)}
+          onCreated={() => {
+            supabase.from("workflows").select("*").order("created_at", { ascending: false })
+              .then(({ data }) => setWorkflows(data ?? []));
+          }}
         />
 
         <Tabs value={tab} onValueChange={setTab}>
