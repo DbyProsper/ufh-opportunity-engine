@@ -368,7 +368,7 @@ const ProfilePage = () => {
     const bArr = (banks as any[]) ?? [];
     if (bArr[0]) setBanking({ ...blankBanking(), ...bArr[0] });
     const eArr = (emps as any[]) ?? [];
-    if (eArr[0]) setEmployment({ ...blankEmployment(), ...eArr[0], start_date: eArr[0].start_date ?? "", end_date: eArr[0].end_date ?? "" });
+    if (eArr.length) setEmployments(eArr.map((e) => ({ ...blankEmployment(), ...e, start_date: e.start_date ?? "", end_date: e.end_date ?? "" })));
   };
 
   const handleCvUpload = async (file: File) => {
