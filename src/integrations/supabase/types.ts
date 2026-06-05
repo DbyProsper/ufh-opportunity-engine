@@ -59,6 +59,87 @@ export type Database = {
         }
         Relationships: []
       }
+      admin_audit_logs: {
+        Row: {
+          action: string
+          actor_email: string | null
+          actor_id: string | null
+          created_at: string
+          id: string
+          metadata: Json | null
+          reason: string | null
+          role: Database["public"]["Enums"]["app_role"] | null
+          target_email: string | null
+          target_user_id: string | null
+        }
+        Insert: {
+          action: string
+          actor_email?: string | null
+          actor_id?: string | null
+          created_at?: string
+          id?: string
+          metadata?: Json | null
+          reason?: string | null
+          role?: Database["public"]["Enums"]["app_role"] | null
+          target_email?: string | null
+          target_user_id?: string | null
+        }
+        Update: {
+          action?: string
+          actor_email?: string | null
+          actor_id?: string | null
+          created_at?: string
+          id?: string
+          metadata?: Json | null
+          reason?: string | null
+          role?: Database["public"]["Enums"]["app_role"] | null
+          target_email?: string | null
+          target_user_id?: string | null
+        }
+        Relationships: []
+      }
+      admin_invites: {
+        Row: {
+          accepted_at: string | null
+          accepted_by: string | null
+          created_at: string
+          email: string
+          expires_at: string
+          id: string
+          invited_by: string
+          reason: string
+          role: Database["public"]["Enums"]["app_role"]
+          status: string
+          token: string
+        }
+        Insert: {
+          accepted_at?: string | null
+          accepted_by?: string | null
+          created_at?: string
+          email: string
+          expires_at?: string
+          id?: string
+          invited_by: string
+          reason: string
+          role: Database["public"]["Enums"]["app_role"]
+          status?: string
+          token: string
+        }
+        Update: {
+          accepted_at?: string | null
+          accepted_by?: string | null
+          created_at?: string
+          email?: string
+          expires_at?: string
+          id?: string
+          invited_by?: string
+          reason?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          status?: string
+          token?: string
+        }
+        Relationships: []
+      }
       affidavit_submissions: {
         Row: {
           admin_notes: string | null
@@ -369,6 +450,42 @@ export type Database = {
         }
         Relationships: []
       }
+      bulletin_runs: {
+        Row: {
+          created_at: string
+          drafts_created: Json
+          file_hash: string
+          file_name: string
+          id: string
+          opportunities: Json
+          source: string
+          uploaded_by: string | null
+          uploader_email: string | null
+        }
+        Insert: {
+          created_at?: string
+          drafts_created?: Json
+          file_hash: string
+          file_name: string
+          id?: string
+          opportunities?: Json
+          source?: string
+          uploaded_by?: string | null
+          uploader_email?: string | null
+        }
+        Update: {
+          created_at?: string
+          drafts_created?: Json
+          file_hash?: string
+          file_name?: string
+          id?: string
+          opportunities?: Json
+          source?: string
+          uploaded_by?: string | null
+          uploader_email?: string | null
+        }
+        Relationships: []
+      }
       eligibility_rules: {
         Row: {
           created_at: string
@@ -443,6 +560,86 @@ export type Database = {
           supervisor_name?: string | null
           updated_at?: string
           user_id?: string
+        }
+        Relationships: []
+      }
+      external_application_clicks: {
+        Row: {
+          created_at: string
+          external_link: string | null
+          external_opportunity_id: string | null
+          id: string
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          external_link?: string | null
+          external_opportunity_id?: string | null
+          id?: string
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          external_link?: string | null
+          external_opportunity_id?: string | null
+          id?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "external_application_clicks_external_opportunity_id_fkey"
+            columns: ["external_opportunity_id"]
+            isOneToOne: false
+            referencedRelation: "external_opportunities"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      external_opportunities: {
+        Row: {
+          confidence: number | null
+          created_at: string
+          created_by: string | null
+          deadline: string | null
+          description: string | null
+          external_link: string | null
+          id: string
+          organization: string | null
+          requirements: string | null
+          source: string | null
+          status: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          confidence?: number | null
+          created_at?: string
+          created_by?: string | null
+          deadline?: string | null
+          description?: string | null
+          external_link?: string | null
+          id?: string
+          organization?: string | null
+          requirements?: string | null
+          source?: string | null
+          status?: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          confidence?: number | null
+          created_at?: string
+          created_by?: string | null
+          deadline?: string | null
+          description?: string | null
+          external_link?: string | null
+          id?: string
+          organization?: string | null
+          requirements?: string | null
+          source?: string | null
+          status?: string
+          title?: string
+          updated_at?: string
         }
         Relationships: []
       }
@@ -799,6 +996,7 @@ export type Database = {
           avatar_url: string | null
           bio: string | null
           created_at: string
+          current_qualification: string | null
           cv_path: string | null
           cv_text: string | null
           cv_uploaded_at: string | null
@@ -809,6 +1007,7 @@ export type Database = {
           faculty: string | null
           full_name: string | null
           gender: string | null
+          highest_qualification_completed: string | null
           home_language: string | null
           id: string
           id_number: string | null
@@ -828,6 +1027,7 @@ export type Database = {
           avatar_url?: string | null
           bio?: string | null
           created_at?: string
+          current_qualification?: string | null
           cv_path?: string | null
           cv_text?: string | null
           cv_uploaded_at?: string | null
@@ -838,6 +1038,7 @@ export type Database = {
           faculty?: string | null
           full_name?: string | null
           gender?: string | null
+          highest_qualification_completed?: string | null
           home_language?: string | null
           id: string
           id_number?: string | null
@@ -857,6 +1058,7 @@ export type Database = {
           avatar_url?: string | null
           bio?: string | null
           created_at?: string
+          current_qualification?: string | null
           cv_path?: string | null
           cv_text?: string | null
           cv_uploaded_at?: string | null
@@ -867,6 +1069,7 @@ export type Database = {
           faculty?: string | null
           full_name?: string | null
           gender?: string | null
+          highest_qualification_completed?: string | null
           home_language?: string | null
           id?: string
           id_number?: string | null
@@ -1192,6 +1395,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      accept_admin_invite: { Args: { _token: string }; Returns: Json }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
@@ -1200,9 +1404,19 @@ export type Database = {
         Returns: boolean
       }
       is_admin: { Args: { _user_id: string }; Returns: boolean }
+      is_super_admin: { Args: { _user_id: string }; Returns: boolean }
+      revoke_admin_role: {
+        Args: {
+          _reason: string
+          _role: Database["public"]["Enums"]["app_role"]
+          _target: string
+        }
+        Returns: Json
+      }
+      withdraw_application: { Args: { _id: string }; Returns: undefined }
     }
     Enums: {
-      app_role: "student" | "staff" | "admin"
+      app_role: "student" | "staff" | "admin" | "super_admin" | "reviewer"
       application_status:
         | "draft"
         | "submitted"
@@ -1360,7 +1574,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      app_role: ["student", "staff", "admin"],
+      app_role: ["student", "staff", "admin", "super_admin", "reviewer"],
       application_status: [
         "draft",
         "submitted",

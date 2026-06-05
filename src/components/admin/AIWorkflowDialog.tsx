@@ -36,6 +36,7 @@ export const AIWorkflowDialog = ({ open, onClose, onCreated }: Props) => {
             target_role: audience,
             faculty: faculty || undefined,
             deadline: deadline || undefined,
+            is_active: false,
           },
         },
       });

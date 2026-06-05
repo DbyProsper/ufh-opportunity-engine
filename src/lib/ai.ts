@@ -1,5 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
 import type { Tables } from "@/integrations/supabase/types";
+import { checkEligibility } from "@/lib/eligibility";
 
 type Profile = Partial<Tables<"profiles">>;
 type Workflow = Tables<"workflows">;
@@ -17,13 +18,13 @@ export async function generateSuggestion(
   field: { id?: string; label: string; help_text?: string; type?: string },
   profile: Profile | null,
   workflow?: { name: string; description?: string | null } | null,
-  opts: { regenerate?: boolean } = {}
+  opts: { regenerate?: boolean; context?: string } = {}
 ): Promise<SuggestionResult> {
-  const k = key(["suggest", field.label, profile?.id, workflow?.name, opts.regenerate ? Date.now() : 0]);
+  const k = key(["suggest", field.label, profile?.id, workflow?.name, opts.context ?? "", opts.regenerate ? Date.now() : 0]);
   if (!opts.regenerate && cache.has(k)) return cache.get(k);
   try {
     const { data, error } = await supabase.functions.invoke("ai-assist", {
-      body: { action: "suggest", payload: { field, profile, workflow } },
+      body: { action: "suggest", payload: { field, profile, workflow, context: opts.context } },
     });
     if (error) throw error;
     const result = { text: (data as any).text, source: (data as any).source } as SuggestionResult;
@@ -32,6 +33,25 @@ export async function generateSuggestion(
   } catch (e) {
     console.error("generateSuggestion failed, falling back", e);
     return { text: localSuggestion(field, profile), source: "rules" };
+  }
+}
+
+export async function rewriteSuggestion(
+  field: { id?: string; label: string; help_text?: string; type?: string },
+  current: string,
+  profile: Profile | null,
+  workflow?: { name: string; description?: string | null } | null,
+  context?: string,
+): Promise<SuggestionResult> {
+  try {
+    const { data, error } = await supabase.functions.invoke("ai-assist", {
+      body: { action: "rewrite", payload: { field, profile, workflow, current, context } },
+    });
+    if (error) throw error;
+    return { text: (data as any).text, source: (data as any).source } as SuggestionResult;
+  } catch (e) {
+    console.error("rewriteSuggestion failed", e);
+    return { text: current?.trim() || localSuggestion(field, profile), source: "rules" };
   }
 }
 
@@ -58,67 +78,17 @@ export function scoreEligibility(
   workflow: Workflow,
   rules: Tables<"eligibility_rules">[] = []
 ): EligibilityScored {
-  const reasons: string[] = [];
-  const positive: string[] = [];
-  let score = 0;
-
-  if (!profile) {
-    return { eligible: false, score: 0, reasons: ["Complete your profile to check eligibility"], positive: [] };
-  }
-
-  // Role match
-  if (workflow.target_role === "any") {
-    score += 25;
-    positive.push("Open to any role");
-  } else if (roles.includes(workflow.target_role)) {
-    score += 25;
-    positive.push(`You are registered as a ${workflow.target_role}`);
-  } else {
-    reasons.push(`Restricted to ${workflow.target_role}s`);
-  }
-
-  // Department
-  if (workflow.department && profile.department) {
-    if (workflow.department.toLowerCase() === profile.department.toLowerCase()) {
-      score += 25;
-      positive.push(`Department matches (${profile.department})`);
-    } else {
-      reasons.push(`Only for ${workflow.department} department`);
-    }
-  } else if (!workflow.department) {
-    score += 10;
-  }
-
-  // Faculty
-  if (workflow.faculty && profile.faculty) {
-    if (workflow.faculty.toLowerCase() === profile.faculty.toLowerCase()) {
-      score += 20;
-      positive.push(`Faculty matches (${profile.faculty})`);
-    } else {
-      reasons.push(`Only for Faculty of ${workflow.faculty}`);
-    }
-  } else if (!workflow.faculty) {
-    score += 10;
-  }
-
-  // Custom eligibility rules
-  for (const r of rules) {
-    const val = (profile as any)?.[r.rule_type];
-    if (val && String(val).toLowerCase() === r.rule_value.toLowerCase()) {
-      score += 10;
-      positive.push(`${r.rule_type}: ${r.rule_value} ✓`);
-    } else if (val) {
-      reasons.push(`${r.rule_type}: ${r.rule_value} required`);
-    }
-  }
-
-  if (workflow.deadline && new Date(workflow.deadline) < new Date()) {
-    reasons.push("Application deadline has passed");
-  }
-  if (!workflow.is_active) reasons.push("Not currently accepting applications");
-
-  const eligible = reasons.length === 0;
-  return { eligible, score: Math.min(100, score), reasons, positive };
+  // Delegate to the canonical eligibility engine so explainer / details dialog / card
+  // all stay in sync with the new rule types (postgrad, year_of_study, etc.).
+  const r = checkEligibility(profile, roles, workflow, rules);
+  const reasons = r.reasons;
+  const positive = r.positive ?? [];
+  // Score: start at 100, subtract per blocker, plus small boosts for positives capped at 100.
+  let score = positive.length * 15;
+  if (r.eligible) score = Math.max(score, 60);
+  score -= reasons.length * 25;
+  score = Math.max(0, Math.min(100, score));
+  return { eligible: r.eligible, score, reasons, positive };
 }
 
 export async function explainEligibility(

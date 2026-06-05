@@ -23,9 +23,13 @@ import { WorkflowEditor } from "@/components/admin/WorkflowEditor";
 import { ApplicationDetail } from "@/components/admin/ApplicationDetail";
 import { OfferTemplateManager } from "@/components/admin/OfferTemplateManager";
 import { AIWorkflowDialog } from "@/components/admin/AIWorkflowDialog";
+import { BulletinExtractor } from "@/components/admin/BulletinExtractor";
 import { BackButton } from "@/components/BackButton";
-import { History } from "lucide-react";
+import { History, FileSearch } from "lucide-react";
 import { UFH_FACULTIES, UFH_FACULTY_NAMES } from "@/data/ufh";
+import { AdminManagement } from "@/components/admin/AdminManagement";
+import { Switch } from "@/components/ui/switch";
+import { ExternalLink } from "lucide-react";
 
 const Admin = () => {
   const { user, isAdmin, loading: authLoading } = useAuth();
@@ -34,6 +38,7 @@ const Admin = () => {
   const [workflows, setWorkflows] = useState<any[]>([]);
   const [applications, setApplications] = useState<any[]>([]);
   const [profiles, setProfiles] = useState<any[]>([]);
+  const [externalOpps, setExternalOpps] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [newWf, setNewWf] = useState({ name: "", slug: "", description: "" });
@@ -42,9 +47,12 @@ const Admin = () => {
   const [templatesFor, setTemplatesFor] = useState<{ id: string; name: string } | null>(null);
   const [admins, setAdmins] = useState<any[]>([]);
   const [aiOpen, setAiOpen] = useState(false);
+  const [bulletinOpen, setBulletinOpen] = useState(false);
   const [selectedAppIds, setSelectedAppIds] = useState<string[]>([]);
   const [confirmDelete, setConfirmDelete] = useState<null | { ids: string[] }>(null);
   const [deleting, setDeleting] = useState(false);
+  const [confirmDeleteWf, setConfirmDeleteWf] = useState<null | { id: string; name: string }>(null);
+  const [deletingWf, setDeletingWf] = useState(false);
   const [aiRankOn, setAiRankOn] = useState(false);
   const [rankings, setRankings] = useState<Record<string, RankedApplication>>({});
   const [explainRank, setExplainRank] = useState<{ id: string } | null>(null);
@@ -76,6 +84,8 @@ const Admin = () => {
       setWorkflows(wfRes.data ?? []);
       setApplications(appsRes.data ?? []);
       setProfiles(profRes.data ?? []);
+      const { data: extRes } = await supabase.from("external_opportunities" as any).select("*").order("created_at", { ascending: false });
+      setExternalOpps((extRes as any) ?? []);
       const { data: ar } = await supabase.from("user_roles").select("user_id").eq("role", "admin");
       const ids = (ar ?? []).map((r: any) => r.user_id);
       if (ids.length) {
@@ -144,6 +154,35 @@ const Admin = () => {
     } catch (e: any) {
       toast.error(e?.message ?? "Could not delete");
     } finally { setDeleting(false); }
+  };
+
+  const runDeleteWorkflow = async () => {
+    if (!confirmDeleteWf) return;
+    const wfId = confirmDeleteWf.id;
+    setDeletingWf(true);
+    try {
+      // Cascade: applications first (which cascades to their own dependents)
+      const { data: wfApps } = await supabase.from("applications").select("id").eq("workflow_id", wfId);
+      const appIds = (wfApps ?? []).map((a: any) => a.id);
+      if (appIds.length) await cascadeDeleteApplications(appIds);
+
+      // Workflow-owned child rows
+      await supabase.from("workflow_offer_templates").delete().eq("workflow_id", wfId);
+      await supabase.from("eligibility_rules").delete().eq("workflow_id", wfId);
+      await supabase.from("workflow_documents").delete().eq("workflow_id", wfId);
+      await supabase.from("workflow_fields").delete().eq("workflow_id", wfId);
+      await supabase.from("workflow_steps").delete().eq("workflow_id", wfId);
+
+      const { error } = await supabase.from("workflows").delete().eq("id", wfId);
+      if (error) throw error;
+
+      setWorkflows((p) => p.filter((w) => w.id !== wfId));
+      setApplications((p) => p.filter((a) => a.workflow_id !== wfId));
+      toast.success(`Deleted "${confirmDeleteWf.name}"`);
+      setConfirmDeleteWf(null);
+    } catch (e: any) {
+      toast.error(e?.message ?? "Could not delete workflow");
+    } finally { setDeletingWf(false); }
   };
 
   const toggleSelect = (id: string) => {
@@ -241,6 +280,9 @@ const Admin = () => {
             <p className="text-muted-foreground text-sm">Manage workflows and review applications.</p>
           </div>
           <div className="flex items-center gap-2">
+            <Button size="sm" variant="outline" onClick={() => setBulletinOpen(true)}>
+              <FileSearch className="w-3.5 h-3.5 mr-1 text-accent" /> Extract from Daily Bulletin
+            </Button>
             <Button size="sm" variant="outline" onClick={() => setAiOpen(true)}>
               <Sparkles className="w-3.5 h-3.5 mr-1 text-accent" /> AI workflow
             </Button>
@@ -254,10 +296,22 @@ const Admin = () => {
           onCreated={(wf) => { setWorkflows((p) => [wf, ...p]); setEditingWf(wf.id); setTab("workflows"); }}
         />
 
+        <BulletinExtractor
+          open={bulletinOpen}
+          onClose={() => setBulletinOpen(false)}
+          onCreated={() => {
+            supabase.from("workflows").select("*").order("created_at", { ascending: false })
+              .then(({ data }) => setWorkflows(data ?? []));
+            supabase.from("external_opportunities" as any).select("*").order("created_at", { ascending: false })
+              .then(({ data }) => setExternalOpps((data as any) ?? []));
+          }}
+        />
+
         <Tabs value={tab} onValueChange={setTab}>
           <TabsList className="mb-6">
             <TabsTrigger value="applications">Applications ({applications.length})</TabsTrigger>
             <TabsTrigger value="workflows">Workflows ({workflows.length})</TabsTrigger>
+            <TabsTrigger value="access">Access</TabsTrigger>
           </TabsList>
 
           <TabsContent value="applications">
@@ -495,7 +549,23 @@ const Admin = () => {
                       <Input value={newWf.slug} onChange={(e) => setNewWf({ ...newWf, slug: e.target.value })} />
                     </div>
                     <div className="space-y-2">
-                      <Label>Description</Label>
+                      <div className="flex items-center justify-between">
+                        <Label>Description</Label>
+                        <Button type="button" size="sm" variant="ghost" onClick={async () => {
+                          if (!newWf.name) return toast.info("Add a name first");
+                          try {
+                            const { generateSuggestion } = await import("@/lib/ai");
+                            const res = await generateSuggestion(
+                              { label: "Workflow description", type: "textarea" },
+                              null,
+                              { name: newWf.name, description: newWf.description }
+                            );
+                            setNewWf((p) => ({ ...p, description: res.text }));
+                          } catch (e: any) { toast.error(e?.message ?? "AI failed"); }
+                        }}>
+                          <Sparkles className="w-3 h-3 mr-1 text-accent" /> AI assist
+                        </Button>
+                      </div>
                       <Textarea value={newWf.description} onChange={(e) => setNewWf({ ...newWf, description: e.target.value })} rows={3} />
                     </div>
                     <DialogFooter>
@@ -508,7 +578,14 @@ const Admin = () => {
 
             <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {workflows.map((w) => (
-                <Card key={w.id}>
+                <Card
+                  key={w.id}
+                  className="group cursor-pointer hover:shadow-lg hover:border-primary/40 transition"
+                  onClick={() => setEditingWf(w.id)}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => { if (e.key === "Enter") setEditingWf(w.id); }}
+                >
                   <CardContent className="p-5">
                     <div className="flex items-start justify-between mb-2 gap-2">
                       <h3 className="font-semibold">{w.name}</h3>
@@ -516,16 +593,34 @@ const Admin = () => {
                     </div>
                     <p className="text-xs text-muted-foreground line-clamp-2 mb-3">{w.description}</p>
                     <p className="text-xs text-muted-foreground">/{w.slug}</p>
-                     <div className="flex items-center justify-between mt-3 flex-wrap gap-2">
+                     <div className="flex items-center justify-between mt-3 flex-wrap gap-2" onClick={(e) => e.stopPropagation()}>
                        <p className="text-xs text-muted-foreground">
                          {applications.filter((a) => a.workflow_id === w.id).length} applications
                        </p>
-                       <div className="flex gap-1.5">
+                       <div className="flex gap-1.5 opacity-70 group-hover:opacity-100 transition-opacity">
+                         <Button
+                           size="sm"
+                           variant={w.is_active ? "outline" : "default"}
+                           className={w.is_active ? "" : "btn-gradient-primary text-primary-foreground"}
+                           onClick={async () => {
+                             const next = !w.is_active;
+                             const { error } = await supabase.from("workflows").update({ is_active: next }).eq("id", w.id);
+                             if (error) return toast.error(error.message);
+                             setWorkflows((p) => p.map((x) => x.id === w.id ? { ...x, is_active: next } : x));
+                             toast.success(next ? "Published" : "Unpublished");
+                           }}
+                           title={w.is_active ? "Unpublish workflow" : "Publish workflow"}
+                         >
+                           {w.is_active ? "Unpublish" : "Publish"}
+                         </Button>
                          <Button size="sm" variant="outline" onClick={() => setTemplatesFor({ id: w.id, name: w.name })}>
                            <Stamp className="w-3.5 h-3.5 mr-1" /> Offer templates
                          </Button>
                          <Button size="sm" variant="outline" onClick={() => setEditingWf(w.id)}>
                            <Settings2 className="w-3.5 h-3.5 mr-1" /> Edit
+                         </Button>
+                         <Button size="sm" variant="outline" className="text-destructive" onClick={() => setConfirmDeleteWf({ id: w.id, name: w.name })} title="Delete workflow">
+                           <Trash2 className="w-3.5 h-3.5" />
                          </Button>
                        </div>
                      </div>
@@ -533,6 +628,68 @@ const Admin = () => {
                 </Card>
               ))}
             </div>
+
+            {/* External opportunity drafts/published from the bulletin */}
+            {externalOpps.length > 0 && (
+              <div className="mt-8">
+                <h3 className="text-lg font-semibold mb-3 flex items-center gap-2">
+                  <ExternalLink className="w-4 h-4 text-accent" /> External opportunities ({externalOpps.length})
+                </h3>
+                <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {externalOpps.map((e) => (
+                    <Card key={e.id} className="border-dashed">
+                      <CardContent className="p-5">
+                        <div className="flex items-start justify-between mb-2 gap-2">
+                          <h4 className="font-semibold leading-tight">{e.title}</h4>
+                          <Badge variant={e.status === "published" ? "default" : "outline"}>{e.status}</Badge>
+                        </div>
+                        {e.organization && <p className="text-xs text-muted-foreground mb-1">{e.organization}</p>}
+                        <p className="text-xs text-muted-foreground line-clamp-3 mb-3">{e.description}</p>
+                        {e.external_link && (
+                          <a href={e.external_link} target="_blank" rel="noopener noreferrer" className="text-xs text-primary inline-flex items-center gap-1 mb-3">
+                            <ExternalLink className="w-3 h-3" /> {new URL(e.external_link).host}
+                          </a>
+                        )}
+                        <div className="flex gap-1.5 flex-wrap">
+                          <Button
+                            size="sm"
+                            variant={e.status === "published" ? "outline" : "default"}
+                            className={e.status === "published" ? "" : "btn-gradient-primary text-primary-foreground"}
+                            onClick={async () => {
+                              const next = e.status === "published" ? "draft" : "published";
+                              const { error } = await supabase.from("external_opportunities" as any).update({ status: next }).eq("id", e.id);
+                              if (error) return toast.error(error.message);
+                              setExternalOpps((p) => p.map((x) => x.id === e.id ? { ...x, status: next } : x));
+                              toast.success(next === "published" ? "Published" : "Unpublished");
+                            }}
+                          >
+                            {e.status === "published" ? "Unpublish" : "Publish"}
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="text-destructive"
+                            onClick={async () => {
+                              if (!confirm(`Delete external opportunity "${e.title}"?`)) return;
+                              const { error } = await supabase.from("external_opportunities" as any).delete().eq("id", e.id);
+                              if (error) return toast.error(error.message);
+                              setExternalOpps((p) => p.filter((x) => x.id !== e.id));
+                              toast.success("Deleted");
+                            }}
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </Button>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              </div>
+            )}
+          </TabsContent>
+
+          <TabsContent value="access">
+            <AdminManagement />
           </TabsContent>
         </Tabs>
 
@@ -570,6 +727,23 @@ const Admin = () => {
               <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
               <AlertDialogAction onClick={runDelete} disabled={deleting} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
                 {deleting ? <Loader2 className="w-4 h-4 animate-spin" /> : "Delete"}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        <AlertDialog open={!!confirmDeleteWf} onOpenChange={(o) => !o && setConfirmDeleteWf(null)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete workflow "{confirmDeleteWf?.name}"?</AlertDialogTitle>
+              <AlertDialogDescription>
+                This permanently removes the workflow along with all of its steps, fields, required documents, eligibility rules, offer templates, and every application submitted to it (including responses, uploads, offers, affidavits and messages). This cannot be undone.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={deletingWf}>Cancel</AlertDialogCancel>
+              <AlertDialogAction onClick={runDeleteWorkflow} disabled={deletingWf} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                {deletingWf ? <Loader2 className="w-4 h-4 animate-spin" /> : "Delete workflow"}
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>

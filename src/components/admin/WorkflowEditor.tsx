@@ -11,8 +11,10 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { ArrowDown, ArrowUp, FileText, GripVertical, Layers, ListChecks, Loader2, Plus, ScrollText, Trash2 } from "lucide-react";
+import { ArrowDown, ArrowUp, FileText, GripVertical, Layers, ListChecks, Loader2, Plus, ScrollText, Sparkles, Trash2, Wand2 } from "lucide-react";
 import { UFH_FACULTIES, UFH_FACULTY_NAMES } from "@/data/ufh";
+import { generateSuggestion, rewriteSuggestion } from "@/lib/ai";
+import { RULE_TYPES, RULE_TYPE_LABELS, YEAR_OF_STUDY_OPTIONS, QUALIFICATION_LEVELS } from "@/lib/eligibility";
 
 const FIELD_TYPES = ["text", "textarea", "select", "multiselect", "date", "file", "number", "email", "phone"] as const;
 const PROFILE_FIELDS = ["full_name", "email", "phone", "student_number", "staff_number", "faculty", "department", "qualification", "year_of_study", "address", "bio"];
@@ -29,6 +31,24 @@ export const WorkflowEditor = ({ workflowId, onClose }: Props) => {
   const [fields, setFields] = useState<any[]>([]);
   const [docs, setDocs] = useState<any[]>([]);
   const [rules, setRules] = useState<any[]>([]);
+  const [aiBusy, setAiBusy] = useState<string | null>(null);
+
+  const aiHelp = async (label: string, current: string, onResult: (text: string) => void, key: string) => {
+    setAiBusy(key);
+    try {
+      const field = { id: key, label, type: "textarea" };
+      const ctxWorkflow = { name: wf?.name ?? "Workflow", description: wf?.description ?? "" };
+      const res = current?.trim()
+        ? await rewriteSuggestion(field, current, null, ctxWorkflow as any, "admin_workflow_description")
+        : await generateSuggestion(field, null, ctxWorkflow as any, { regenerate: false, context: "admin_workflow_description" });
+      if (res?.text) {
+        onResult(res.text);
+        toast.success(current?.trim() ? "Rewritten with AI" : "AI suggestion inserted");
+      }
+    } catch (e: any) {
+      toast.error(e?.message ?? "AI assist failed");
+    } finally { setAiBusy(null); }
+  };
 
   const load = async () => {
     const [wfR, sR, fR, dR, rR] = await Promise.all([
@@ -186,8 +206,22 @@ export const WorkflowEditor = ({ workflowId, onClose }: Props) => {
               <div className="space-y-2"><Label>Slug</Label>
                 <Input defaultValue={wf.slug} onBlur={(e) => saveMeta({ slug: e.target.value })} />
               </div>
-              <div className="space-y-2 sm:col-span-2"><Label>Description</Label>
-                <Textarea defaultValue={wf.description ?? ""} rows={3} onBlur={(e) => saveMeta({ description: e.target.value })} />
+              <div className="space-y-2 sm:col-span-2">
+                <div className="flex items-center justify-between">
+                  <Label>Description</Label>
+                  <Button size="sm" variant="ghost" disabled={aiBusy === "wf-desc"}
+                    onClick={() => {
+                      const ta = document.getElementById("wf-desc-ta") as HTMLTextAreaElement | null;
+                      aiHelp("Workflow description", ta?.value ?? "", (text) => {
+                        if (ta) ta.value = text;
+                        saveMeta({ description: text });
+                      }, "wf-desc");
+                    }}>
+                    {aiBusy === "wf-desc" ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : <Sparkles className="w-3 h-3 mr-1 text-accent" />}
+                    AI assist
+                  </Button>
+                </div>
+                <Textarea id="wf-desc-ta" defaultValue={wf.description ?? ""} rows={3} onBlur={(e) => saveMeta({ description: e.target.value })} />
               </div>
               <div className="space-y-2"><Label>Target audience</Label>
                 <Select defaultValue={wf.target_role} onValueChange={(v) => saveMeta({ target_role: v })}>
@@ -299,27 +333,23 @@ export const WorkflowEditor = ({ workflowId, onClose }: Props) => {
           {/* RULES */}
           <TabsContent value="rules" className="space-y-4 mt-4">
             <div className="flex justify-between items-center">
-              <p className="text-sm text-muted-foreground">Profile-based rules block applicants when their profile doesn't match.</p>
+              <p className="text-sm text-muted-foreground">Rules that gate eligibility — postgraduate status, year of study, required student/staff number. Personal details (name, phone) are enforced at application level, not here.</p>
               <Button size="sm" onClick={addRule}><Plus className="w-3.5 h-3.5 mr-1" /> Add rule</Button>
             </div>
             {rules.length === 0 && <p className="text-sm text-muted-foreground text-center py-6">No additional rules — only built-in faculty/department/deadline checks apply.</p>}
             {rules.map((r) => (
               <Card key={r.id}>
                 <CardContent className="p-4 flex flex-wrap items-end gap-3">
-                  <div className="space-y-1 flex-1 min-w-[140px]">
-                    <Label className="text-xs">Profile field</Label>
+                  <div className="space-y-1 flex-1 min-w-[200px]">
+                    <Label className="text-xs">Rule</Label>
                     <Select defaultValue={r.rule_type} onValueChange={(v) => { updateRuleLocal(r.id, { rule_type: v }); persistRule(r.id, { rule_type: v }); }}>
                       <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent className="bg-popover">
-                        {PROFILE_FIELDS.map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}
+                        {RULE_TYPES.map((p) => <SelectItem key={p} value={p}>{RULE_TYPE_LABELS[p]}</SelectItem>)}
                       </SelectContent>
                     </Select>
                   </div>
-                  <div className="space-y-1 flex-1 min-w-[200px]">
-                    <Label className="text-xs">Required value (case-insensitive)</Label>
-                    <Input defaultValue={r.rule_value}
-                      onBlur={(e) => { updateRuleLocal(r.id, { rule_value: e.target.value }); persistRule(r.id, { rule_value: e.target.value }); }} />
-                  </div>
+                  <RuleValueInput rule={r} onChange={(v) => { updateRuleLocal(r.id, { rule_value: v }); persistRule(r.id, { rule_value: v }); }} />
                   <Button size="icon" variant="ghost" className="text-destructive" onClick={() => deleteRule(r.id)}><Trash2 className="w-3.5 h-3.5" /></Button>
                 </CardContent>
               </Card>
@@ -385,6 +415,60 @@ const FieldRow = ({ field, index, total, onChange, onPersist, onDelete, onMove }
         <Input className="h-7 text-xs flex-1" placeholder="Help text (optional)" defaultValue={field.help_text ?? ""}
           onBlur={(e) => { onChange({ help_text: e.target.value }); onPersist({ help_text: e.target.value }); }} />
       </div>
+    </div>
+  );
+};
+
+// ---------- rule value input (typed by rule_type) ----------
+const RuleValueInput = ({ rule, onChange }: { rule: any; onChange: (v: string) => void }) => {
+  const t = rule.rule_type;
+  if (t === "has_student_number" || t === "has_staff_number") {
+    return <div className="text-xs text-muted-foreground italic min-w-[200px] flex-1">No value needed — rule is enforced when missing.</div>;
+  }
+  if (t === "is_postgraduate") {
+    return (
+      <div className="space-y-1 flex-1 min-w-[200px]">
+        <Label className="text-xs">Required</Label>
+        <Select defaultValue={rule.rule_value || "true"} onValueChange={onChange}>
+          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectContent className="bg-popover">
+            <SelectItem value="true">Yes — postgraduates only</SelectItem>
+            <SelectItem value="false">No — undergraduates only</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+    );
+  }
+  if (t === "min_year_of_study") {
+    return (
+      <div className="space-y-1 flex-1 min-w-[200px]">
+        <Label className="text-xs">Minimum year</Label>
+        <Select defaultValue={rule.rule_value || "1"} onValueChange={onChange}>
+          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectContent className="bg-popover">
+            {YEAR_OF_STUDY_OPTIONS.map((y) => <SelectItem key={y} value={y}>{y}</SelectItem>)}
+          </SelectContent>
+        </Select>
+      </div>
+    );
+  }
+  if (t === "requires_qualification_completed" || t === "requires_current_qualification") {
+    return (
+      <div className="space-y-1 flex-1 min-w-[200px]">
+        <Label className="text-xs">Qualification</Label>
+        <Select defaultValue={rule.rule_value || ""} onValueChange={onChange}>
+          <SelectTrigger><SelectValue placeholder="Select…" /></SelectTrigger>
+          <SelectContent className="bg-popover">
+            {QUALIFICATION_LEVELS.map((q) => <SelectItem key={q} value={q}>{q}</SelectItem>)}
+          </SelectContent>
+        </Select>
+      </div>
+    );
+  }
+  return (
+    <div className="space-y-1 flex-1 min-w-[200px]">
+      <Label className="text-xs">Required value</Label>
+      <Input defaultValue={rule.rule_value} onBlur={(e) => onChange(e.target.value)} />
     </div>
   );
 };

@@ -14,6 +14,7 @@ import { UFH_FACULTIES, UFH_FACULTY_NAMES } from "@/data/ufh";
 import { useSectionAutoSave, type SaveStatus } from "@/hooks/useSectionAutoSave";
 import { SectionCard, type SectionStatus } from "@/components/profile/SectionCard";
 import { Field } from "@/components/profile/Field";
+import { YEAR_OF_STUDY_OPTIONS, QUALIFICATION_LEVELS } from "@/lib/eligibility";
 
 // ---------- Types ----------
 type Personal = {
@@ -22,6 +23,7 @@ type Personal = {
   race: string; disability: string; home_language: string;
   student_number: string; staff_number: string;
   faculty: string; department: string; qualification: string; year_of_study: string;
+  highest_qualification_completed: string; current_qualification: string;
   bio: string;
 };
 type Address = {
@@ -60,6 +62,7 @@ const ProfilePage = () => {
     race: "", disability: "", home_language: "",
     student_number: "", staff_number: "",
     faculty: "", department: "", qualification: "", year_of_study: "",
+    highest_qualification_completed: "", current_qualification: "",
     bio: "",
   });
   const [address1, setAddress1] = useState<Address>(blankAddress("home"));
@@ -67,7 +70,7 @@ const ProfilePage = () => {
   const [nok, setNok] = useState<NextOfKin>(blankNok());
   const [financial, setFinancial] = useState<Financial>({ sars_tax_number: "", income_tax_ref: "", vat_number: "", dependants: "", marital_status: "" });
   const [banking, setBanking] = useState<Banking>(blankBanking());
-  const [employment, setEmployment] = useState<Employment>(blankEmployment());
+  const [employments, setEmployments] = useState<Employment[]>([blankEmployment()]);
 
   // CV / docs (kept from previous version)
   const [cvPath, setCvPath] = useState<string | null>(null);
@@ -106,6 +109,8 @@ const ProfilePage = () => {
           student_number: p.student_number ?? "", staff_number: p.staff_number ?? "",
           faculty: p.faculty ?? "", department: p.department ?? "",
           qualification: p.qualification ?? "", year_of_study: p.year_of_study ?? "",
+          highest_qualification_completed: (p as any).highest_qualification_completed ?? "",
+          current_qualification: (p as any).current_qualification ?? "",
           bio: p.bio ?? "",
         });
         setCvPath((p as any).cv_path ?? null);
@@ -141,11 +146,11 @@ const ProfilePage = () => {
       if (bArr[0]) setBanking({ ...blankBanking(), ...bArr[0] });
 
       const eArr = (emps as any[]) ?? [];
-      if (eArr[0]) setEmployment({
-        ...blankEmployment(), ...eArr[0],
-        start_date: eArr[0].start_date ?? "",
-        end_date: eArr[0].end_date ?? "",
-      });
+      if (eArr.length) setEmployments(eArr.map((e) => ({
+        ...blankEmployment(), ...e,
+        start_date: e.start_date ?? "",
+        end_date: e.end_date ?? "",
+      })));
 
       setProfileDocs(pd ?? []);
       setLoading(false);
@@ -215,7 +220,7 @@ const ProfilePage = () => {
     }
   };
 
-  const saveEmployment = async (v: Employment) => {
+  const saveEmploymentRow = async (idx: number, v: Employment) => {
     if (!user) return;
     const row = {
       ...v, user_id: user.id,
@@ -224,12 +229,22 @@ const ProfilePage = () => {
     };
     if (v.id) {
       const { error } = await (supabase.from as any)("employment_details").update(row).eq("id", v.id);
-      if (error) throw error;
+      if (error) toast.error(error.message); else toast.success("Employment saved");
     } else if (v.employer?.trim() || v.position?.trim()) {
       const { data, error } = await (supabase.from as any)("employment_details").insert(row).select().single();
-      if (error) throw error;
-      setEmployment((p) => ({ ...p, id: data.id }));
+      if (error) { toast.error(error.message); return; }
+      setEmployments((p) => p.map((e, i) => i === idx ? { ...e, id: data.id } : e));
+      toast.success("Employment added");
     }
+  };
+  const removeEmploymentRow = async (idx: number) => {
+    const e = employments[idx];
+    if (e?.id) {
+      const { error } = await (supabase.from as any)("employment_details").delete().eq("id", e.id);
+      if (error) { toast.error(error.message); return; }
+    }
+    setEmployments((p) => p.length === 1 ? [blankEmployment()] : p.filter((_, i) => i !== idx));
+    toast.success("Removed");
   };
 
   // ---------- Wire autosaves ----------
@@ -239,7 +254,7 @@ const ProfilePage = () => {
   const nokStatus = useSectionAutoSave(nok, saveNok);
   const finStatus = useSectionAutoSave(financial, saveFinancial);
   const bankStatus = useSectionAutoSave(banking, saveBanking);
-  const empStatus = useSectionAutoSave(employment, saveEmployment);
+  // Employments saved on demand per row (multi-employment supported)
 
   // Persist UI flags to profile_extra.__flags
   const saveFlags = async (next: typeof flags) => {
@@ -291,9 +306,11 @@ const ProfilePage = () => {
   const bankSec = useMemo<SectionStatus>(() =>
     sectionStatus([banking.bank_name, banking.account_number, banking.branch_code, banking.account_type, banking.account_holder]),
     [banking]);
-  const empSec = useMemo<SectionStatus>(() =>
-    sectionStatus([employment.employer, employment.position]),
-    [employment]);
+  const empSec = useMemo<SectionStatus>(() => {
+    const filled = employments.filter((e) => e.employer?.trim() || e.position?.trim());
+    if (filled.length === 0) return "incomplete";
+    return filled.every((e) => e.employer?.trim() && e.position?.trim()) ? "complete" : "editing";
+  }, [employments]);
 
   const allSections = [
     { id: "personal", label: "Personal", status: personalSec },
@@ -356,7 +373,7 @@ const ProfilePage = () => {
     const bArr = (banks as any[]) ?? [];
     if (bArr[0]) setBanking({ ...blankBanking(), ...bArr[0] });
     const eArr = (emps as any[]) ?? [];
-    if (eArr[0]) setEmployment({ ...blankEmployment(), ...eArr[0], start_date: eArr[0].start_date ?? "", end_date: eArr[0].end_date ?? "" });
+    if (eArr.length) setEmployments(eArr.map((e) => ({ ...blankEmployment(), ...e, start_date: e.start_date ?? "", end_date: e.end_date ?? "" })));
   };
 
   const handleCvUpload = async (file: File) => {
@@ -581,8 +598,31 @@ const ProfilePage = () => {
                   </SelectContent>
                 </Select>
               </Field>
-              <Field id="qualification" label="Qualification / Programme" value={personal.qualification} onChange={(v) => setPersonal((p) => ({ ...p, qualification: v }))} placeholder="e.g. BSc Computer Science" />
-              <Field id="year_of_study" label="Year of Study" value={personal.year_of_study} onChange={(v) => setPersonal((p) => ({ ...p, year_of_study: v }))} placeholder="e.g. 3rd year" />
+              <Field id="qualification" label="Qualification / Programme (legacy)" value={personal.qualification} onChange={(v) => setPersonal((p) => ({ ...p, qualification: v }))} placeholder="e.g. BSc Computer Science" />
+              <Field id="current_qualification" label="Currently Pursuing" value={personal.current_qualification} onChange={(v) => setPersonal((p) => ({ ...p, current_qualification: v }))}>
+                <Select value={personal.current_qualification} onValueChange={(v) => setPersonal((p) => ({ ...p, current_qualification: v }))}>
+                  <SelectTrigger><SelectValue placeholder="Select qualification you're pursuing" /></SelectTrigger>
+                  <SelectContent className="bg-popover z-50">
+                    {QUALIFICATION_LEVELS.map((q) => <SelectItem key={q} value={q}>{q}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </Field>
+              <Field id="highest_qualification_completed" label="Highest Qualification Completed" value={personal.highest_qualification_completed} onChange={(v) => setPersonal((p) => ({ ...p, highest_qualification_completed: v }))}>
+                <Select value={personal.highest_qualification_completed} onValueChange={(v) => setPersonal((p) => ({ ...p, highest_qualification_completed: v }))}>
+                  <SelectTrigger><SelectValue placeholder="Select highest completed" /></SelectTrigger>
+                  <SelectContent className="bg-popover z-50">
+                    {QUALIFICATION_LEVELS.map((q) => <SelectItem key={q} value={q}>{q}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </Field>
+              <Field id="year_of_study" label="Year of Study" value={personal.year_of_study} onChange={(v) => setPersonal((p) => ({ ...p, year_of_study: v }))}>
+                <Select value={personal.year_of_study} onValueChange={(v) => setPersonal((p) => ({ ...p, year_of_study: v }))}>
+                  <SelectTrigger><SelectValue placeholder="Select year" /></SelectTrigger>
+                  <SelectContent className="bg-popover z-50">
+                    {YEAR_OF_STUDY_OPTIONS.map((y) => <SelectItem key={y} value={y}>{y}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </Field>
               <Field id="bio" label="Short Bio" value={personal.bio} onChange={(v) => setPersonal((p) => ({ ...p, bio: v }))} textarea className="sm:col-span-2" placeholder="2–3 sentences about your background, interests and goals." />
             </div>
           </SectionCard>
@@ -676,17 +716,44 @@ const ProfilePage = () => {
 
         {/* Employment */}
         <div id="employment" className="scroll-mt-24 mb-6">
-          <SectionCard title="Employment" status={empSec} saveStatus={empStatus}
-            description="Most recent or current employment. Add more roles after saving this one.">
-            <div className="grid sm:grid-cols-2 gap-3">
-              <Field id="employer" label="Employer" value={employment.employer} onChange={(v) => setEmployment((p) => ({ ...p, employer: v }))} placeholder="e.g. University of Fort Hare" />
-              <Field id="position" label="Position" value={employment.position} onChange={(v) => setEmployment((p) => ({ ...p, position: v }))} placeholder="e.g. Tutor, Research Assistant" />
-              <Field id="start_date" label="Start Date" type="date" value={employment.start_date} onChange={(v) => setEmployment((p) => ({ ...p, start_date: v }))} />
-              <Field id="end_date" label="End Date" type="date" value={employment.end_date} onChange={(v) => setEmployment((p) => ({ ...p, end_date: v }))} />
-              <label className="flex items-center gap-2 text-sm sm:col-span-2">
-                <input type="checkbox" checked={employment.is_current} onChange={(e) => setEmployment((p) => ({ ...p, is_current: e.target.checked }))} />
-                I currently work here
-              </label>
+          <SectionCard title="Employment" status={empSec}
+            description="Add every role you've held — current and previous. Each entry is saved individually.">
+            <div className="space-y-4">
+              {employments.map((emp, idx) => (
+                <div key={emp.id ?? `new-${idx}`} className="p-3 border rounded-lg space-y-3 bg-muted/20">
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs font-medium text-muted-foreground">Role #{idx + 1}{emp.is_current ? " · Current" : ""}</p>
+                    <div className="flex gap-1.5">
+                      <Button size="sm" variant="outline" onClick={() => saveEmploymentRow(idx, emp)}>Save</Button>
+                      {(employments.length > 1 || emp.id) && (
+                        <Button size="sm" variant="outline" className="text-destructive" onClick={() => removeEmploymentRow(idx)}>
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                  <div className="grid sm:grid-cols-2 gap-3">
+                    <Field id={`employer-${idx}`} label="Employer" value={emp.employer}
+                      onChange={(v) => setEmployments((p) => p.map((e, i) => i === idx ? { ...e, employer: v } : e))}
+                      placeholder="e.g. University of Fort Hare" />
+                    <Field id={`position-${idx}`} label="Position" value={emp.position}
+                      onChange={(v) => setEmployments((p) => p.map((e, i) => i === idx ? { ...e, position: v } : e))}
+                      placeholder="e.g. Tutor, Research Assistant" />
+                    <Field id={`start-${idx}`} label="Start Date" type="date" value={emp.start_date}
+                      onChange={(v) => setEmployments((p) => p.map((e, i) => i === idx ? { ...e, start_date: v } : e))} />
+                    <Field id={`end-${idx}`} label="End Date" type="date" value={emp.end_date}
+                      onChange={(v) => setEmployments((p) => p.map((e, i) => i === idx ? { ...e, end_date: v } : e))} />
+                    <label className="flex items-center gap-2 text-sm sm:col-span-2">
+                      <input type="checkbox" checked={emp.is_current}
+                        onChange={(e) => setEmployments((p) => p.map((x, i) => i === idx ? { ...x, is_current: e.target.checked } : x))} />
+                      I currently work here
+                    </label>
+                  </div>
+                </div>
+              ))}
+              <Button size="sm" variant="outline" onClick={() => setEmployments((p) => [...p, blankEmployment()])}>
+                + Add another role
+              </Button>
             </div>
           </SectionCard>
         </div>

@@ -9,11 +9,17 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Link, useNavigate } from "react-router-dom";
-import { ArrowRight, FileText, CheckCircle2, Clock, AlertCircle, User as UserIcon, Activity, Bell, History } from "lucide-react";
+import { ArrowRight, FileText, CheckCircle2, Clock, AlertCircle, User as UserIcon, Activity, Bell, History, ExternalLink, Eye } from "lucide-react";
+import { Trash2, XCircle } from "lucide-react";
+import { toast } from "sonner";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { formatDistanceToNow } from "date-fns";
+import { OpportunityDetailsDialog } from "@/components/OpportunityDetailsDialog";
+import { Badge } from "@/components/ui/badge";
 
 type Workflow = Tables<"workflows">;
 type Application = Tables<"applications">;
+type ExternalOpp = Tables<"external_opportunities">;
 
 const Dashboard = () => {
   const { user, loading: authLoading, roles } = useAuth();
@@ -22,8 +28,12 @@ const Dashboard = () => {
   const [workflows, setWorkflows] = useState<Workflow[]>([]);
   const [rules, setRules] = useState<Tables<"eligibility_rules">[]>([]);
   const [apps, setApps] = useState<Application[]>([]);
+  const [externals, setExternals] = useState<ExternalOpp[]>([]);
+  const [externalOpen, setExternalOpen] = useState<ExternalOpp | null>(null);
   const [loading, setLoading] = useState(true);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [confirm, setConfirm] = useState<null | { kind: "delete" | "withdraw"; app: Application; wfName: string }>(null);
+  const [busy, setBusy] = useState(false);
   const isAdmin = roles.includes("admin");
 
   useEffect(() => {
@@ -33,16 +43,18 @@ const Dashboard = () => {
   useEffect(() => {
     if (!user) return;
     (async () => {
-      const [profRes, wfRes, ruleRes, appRes] = await Promise.all([
+      const [profRes, wfRes, ruleRes, appRes, extRes] = await Promise.all([
         supabase.from("profiles").select("*").eq("id", user.id).maybeSingle(),
         supabase.from("workflows").select("*").eq("is_active", true).order("created_at", { ascending: false }),
         supabase.from("eligibility_rules").select("*"),
         supabase.from("applications").select("*").eq("user_id", user.id),
+        supabase.from("external_opportunities" as any).select("*").eq("status", "published").order("created_at", { ascending: false }),
       ]);
       setProfile(profRes.data);
       setWorkflows(wfRes.data ?? []);
       setRules(ruleRes.data ?? []);
       setApps(appRes.data ?? []);
+      setExternals(((extRes as any).data ?? []) as ExternalOpp[]);
 
       const { count } = await supabase
         .from("notifications")
@@ -90,6 +102,27 @@ const Dashboard = () => {
     );
   }
 
+  const runConfirm = async () => {
+    if (!confirm) return;
+    setBusy(true);
+    try {
+      if (confirm.kind === "delete") {
+        const { error } = await supabase.from("applications").delete().eq("id", confirm.app.id);
+        if (error) throw error;
+        setApps((p) => p.filter((a) => a.id !== confirm.app.id));
+        toast.success("Draft deleted");
+      } else {
+        const { error } = await (supabase as any).rpc("withdraw_application", { _id: confirm.app.id });
+        if (error) throw error;
+        setApps((p) => p.map((a) => a.id === confirm.app.id ? { ...a, status: "withdrawn" as any } : a));
+        toast.success("Application withdrawn");
+      }
+      setConfirm(null);
+    } catch (e: any) {
+      toast.error(e?.message ?? "Action failed");
+    } finally { setBusy(false); }
+  };
+
   return (
     <div className="min-h-screen bg-background flex flex-col">
       <AppHeader />
@@ -127,9 +160,12 @@ const Dashboard = () => {
 
         {/* Stats */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-8">
-          <StatCard icon={FileText} label="My Applications" value={apps.length} color="primary" />
-          <StatCard icon={Clock} label="In Progress" value={apps.filter(a => a.status === "draft" || a.status === "submitted" || a.status === "under_review").length} color="warning" />
-          <StatCard icon={CheckCircle2} label="Approved" value={apps.filter(a => a.status === "approved").length} color="success" />
+          <StatCard icon={FileText} label="My Applications" value={apps.length} color="primary"
+            onClick={() => document.getElementById("my-applications")?.scrollIntoView({ behavior: "smooth" })} />
+          <StatCard icon={Clock} label="In Progress" value={apps.filter(a => a.status === "draft" || a.status === "submitted" || a.status === "under_review").length} color="warning"
+            onClick={() => document.getElementById("my-applications")?.scrollIntoView({ behavior: "smooth" })} />
+          <StatCard icon={CheckCircle2} label="Approved" value={apps.filter(a => a.status === "approved").length} color="success"
+            onClick={() => document.getElementById("my-applications")?.scrollIntoView({ behavior: "smooth" })} />
           <Link to="/notifications" className="block">
             <Card className="border-0 shadow-sm hover:shadow-md transition relative">
               <CardContent className="p-4">
@@ -150,16 +186,20 @@ const Dashboard = () => {
 
         {/* My Applications */}
         {apps.length > 0 && (
-          <section className="mb-10">
+          <section id="my-applications" className="mb-10 scroll-mt-24">
             <h2 className="text-xl font-semibold text-foreground mb-4">My Applications</h2>
             <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {apps.map((app) => {
                 const wf = workflows.find((w) => w.id === app.workflow_id);
                 if (!wf) return null;
+                const canDelete = app.status === "draft";
+                // Withdrawal is only allowed while the application is still "submitted".
+                // Once a reviewer starts reviewing, the user must contact the reviewer.
+                const canWithdraw = app.status === "submitted";
                 return (
-                  <Link key={app.id} to={`/apply/${wf.slug}`}>
-                    <Card className="hover:shadow-lg transition-all hover:-translate-y-0.5 h-full">
-                      <CardContent className="p-5">
+                  <Card key={app.id} className="hover:shadow-lg transition-all h-full flex flex-col">
+                    <CardContent className="p-5 flex-1 flex flex-col">
+                      <Link to={`/apply/${wf.slug}`} className="flex-1">
                         <div className="flex items-start justify-between gap-2 mb-2">
                           <h3 className="font-semibold leading-tight">{wf.name}</h3>
                           <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium status-${app.status.replace("_","-")}`}>
@@ -167,9 +207,25 @@ const Dashboard = () => {
                           </span>
                         </div>
                         <p className="text-xs text-muted-foreground line-clamp-2">{wf.description}</p>
-                      </CardContent>
-                    </Card>
-                  </Link>
+                      </Link>
+                      {(canDelete || canWithdraw) && (
+                        <div className="flex gap-1.5 mt-3 pt-3 border-t">
+                          {canDelete && (
+                            <Button size="sm" variant="outline" className="text-destructive flex-1"
+                              onClick={() => setConfirm({ kind: "delete", app, wfName: wf.name })}>
+                              <Trash2 className="w-3 h-3 mr-1" /> Delete draft
+                            </Button>
+                          )}
+                          {canWithdraw && (
+                            <Button size="sm" variant="outline" className="text-destructive flex-1"
+                              onClick={() => setConfirm({ kind: "withdraw", app, wfName: wf.name })}>
+                              <XCircle className="w-3 h-3 mr-1" /> Withdraw
+                            </Button>
+                          )}
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
                 );
               })}
             </div>
@@ -199,19 +255,78 @@ const Dashboard = () => {
                     profile={profile}
                     roles={roles}
                     rules={rules.filter((r) => r.workflow_id === wf.id)}
+                    userId={user?.id}
                   />
                 );
               })}
             </div>
           )}
+
+          {externals.length > 0 && (
+            <div className="mt-8">
+              <h3 className="text-lg font-semibold mb-3 flex items-center gap-2">
+                <ExternalLink className="w-4 h-4 text-accent" /> External opportunities
+              </h3>
+              <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                {externals.map((e) => (
+                  <Card key={e.id} className="cursor-pointer hover:shadow-lg transition" onClick={() => setExternalOpen(e)}>
+                    <CardContent className="p-5">
+                      <div className="flex items-start justify-between gap-2 mb-2">
+                        <h4 className="font-semibold leading-tight">{e.title}</h4>
+                        <Badge variant="outline"><ExternalLink className="w-3 h-3 mr-1" />External</Badge>
+                      </div>
+                      {e.organization && <p className="text-xs text-muted-foreground mb-2">{e.organization}</p>}
+                      <p className="text-sm text-muted-foreground line-clamp-3">{e.description}</p>
+                      <Button size="sm" variant="outline" className="mt-3" onClick={(ev) => { ev.stopPropagation(); setExternalOpen(e); }}>
+                        <Eye className="w-3.5 h-3.5 mr-1" /> View & apply externally
+                      </Button>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            </div>
+          )}
         </section>
       </main>
+
+      {externalOpen && (
+        <OpportunityDetailsDialog
+          open={!!externalOpen}
+          onClose={() => setExternalOpen(null)}
+          externalOpp={externalOpen}
+          profile={profile}
+          roles={roles}
+          rules={[]}
+          userId={user?.id}
+        />
+      )}
+
+      <AlertDialog open={!!confirm} onOpenChange={(o) => !o && !busy && setConfirm(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {confirm?.kind === "delete" ? `Delete draft for "${confirm.wfName}"?` : `Withdraw "${confirm?.wfName}" application?`}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {confirm?.kind === "delete"
+                ? "This permanently removes your draft and any answers you've saved. This cannot be undone."
+                : "Reviewers will be notified that you have withdrawn. You can re-apply later if the workflow is still open."}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={busy}>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={runConfirm} disabled={busy} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              {confirm?.kind === "delete" ? "Delete draft" : "Withdraw"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };
 
-const StatCard = ({ icon: Icon, label, value, color }: { icon: any; label: string; value: number; color: string }) => (
-  <Card className="border-0 shadow-sm">
+const StatCard = ({ icon: Icon, label, value, color, onClick }: { icon: any; label: string; value: number; color: string; onClick?: () => void }) => (
+  <Card className="border-0 shadow-sm hover:shadow-md transition cursor-pointer" onClick={onClick} role={onClick ? "button" : undefined} tabIndex={onClick ? 0 : undefined}>
     <CardContent className="p-4">
       <div className={`w-9 h-9 rounded-lg bg-${color}/10 text-${color} flex items-center justify-center mb-2`}>
         <Icon className="w-4 h-4" />
