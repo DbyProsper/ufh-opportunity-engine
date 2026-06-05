@@ -201,14 +201,47 @@ Include the standard personal/identity/academic/address fields plus any extra st
             <div className="flex-1">
               <Label className="text-xs">Bulletin PDF</Label>
               <Input type="file" accept="application/pdf" disabled={busy}
-                onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
+                onChange={(e) => {
+                  setFile(e.target.files?.[0] ?? null);
+                  setPdfBase64(null); setPdfHash(null); setRunId(null); setOpps([]); setPriorRuns([]);
+                }} />
               {file && <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1"><FileText className="w-3 h-3" /> {file.name} ({Math.round(file.size/1024)} KB)</p>}
             </div>
             <Button onClick={analyse} disabled={!file || busy} className="btn-gradient-primary text-primary-foreground">
               {busy ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <Sparkles className="w-4 h-4 mr-1" />}
               Analyze Bulletin
             </Button>
+            {pdfBase64 && (
+              <Button onClick={analyse} disabled={busy} variant="outline" title="Re-run extraction on the same PDF">
+                <RotateCcw className="w-4 h-4 mr-1" /> Re-run
+              </Button>
+            )}
+            <Button onClick={() => setShowHistory((s) => !s)} variant="outline" size="sm">
+              <History className="w-4 h-4 mr-1" /> {showHistory ? "Hide" : "Runs"} ({allRuns.length})
+            </Button>
           </div>
+
+          {showHistory && (
+            <div className="border rounded-lg p-3 max-h-60 overflow-y-auto text-xs space-y-1.5 bg-muted/20">
+              <p className="font-semibold mb-1">Audit log — bulletin extraction runs</p>
+              {allRuns.length === 0 ? (
+                <p className="text-muted-foreground italic">No previous runs.</p>
+              ) : allRuns.map((r) => (
+                <div key={r.id} className="flex items-center justify-between gap-2 border-b last:border-0 pb-1">
+                  <span className="truncate"><strong>{r.file_name}</strong> · {(r.opportunities ?? []).length} found · {(r.drafts_created ?? []).length} drafts</span>
+                  <span className="text-muted-foreground whitespace-nowrap">{new Date(r.created_at).toLocaleString()} · {r.uploader_email ?? "—"}</span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {diff && (diff.added.length > 0 || diff.removed.length > 0) && (
+            <div className="border rounded-lg p-3 bg-accent/5 border-accent/30 text-xs space-y-1">
+              <p className="font-semibold">Comparison vs. previous run on this PDF ({new Date(diff.prev.created_at).toLocaleString()})</p>
+              {diff.added.length > 0 && <p><span className="text-success font-semibold">+ Added:</span> {diff.added.join(", ")}</p>}
+              {diff.removed.length > 0 && <p><span className="text-destructive font-semibold">− Removed:</span> {diff.removed.join(", ")}</p>}
+            </div>
+          )}
 
           {opps.length > 0 && (
             <>
