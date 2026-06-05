@@ -302,6 +302,8 @@ const Admin = () => {
           onCreated={() => {
             supabase.from("workflows").select("*").order("created_at", { ascending: false })
               .then(({ data }) => setWorkflows(data ?? []));
+            supabase.from("external_opportunities" as any).select("*").order("created_at", { ascending: false })
+              .then(({ data }) => setExternalOpps((data as any) ?? []));
           }}
         />
 
