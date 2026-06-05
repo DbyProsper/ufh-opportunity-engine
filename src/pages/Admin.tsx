@@ -69,6 +69,15 @@ const Admin = () => {
   const [dateTo, setDateTo] = useState<string>("");
   const [search, setSearch] = useState("");
 
+  const getExternalLinkHost = (link: string | null | undefined) => {
+    if (!link) return "";
+    try {
+      return new URL(link).host;
+    } catch {
+      return link;
+    }
+  };
+
   useEffect(() => {
     if (!authLoading && !user) navigate("/auth");
   }, [authLoading, user, navigate]);
@@ -488,13 +497,13 @@ const Admin = () => {
                              />
                            </div>
                            <div className="min-w-0 flex-1">
-                             <p className="font-medium text-sm">
+                             <div className="font-medium text-sm flex flex-wrap items-center gap-1">
                                {aiRankOn && rank && <Badge className="mr-2 text-[10px]">#{rank.rank}</Badge>}
-                               {prof?.full_name || prof?.email || "Unknown"}
+                               <span className="truncate">{prof?.full_name || prof?.email || "Unknown"}</span>
                                <span className="text-muted-foreground font-normal"> — {wf?.name}</span>
                                {wf?.target_role === "staff" && <Badge variant="outline" className="ml-2 text-[10px]">Staff</Badge>}
                                {wf?.target_role === "student" && <Badge variant="outline" className="ml-2 text-[10px]">Student</Badge>}
-                             </p>
+                             </div>
                              <p className="text-xs text-muted-foreground flex items-center gap-2 flex-wrap">
                                <span>{prof?.faculty} · {prof?.department}</span>
                                {reviewer ? (
@@ -647,7 +656,7 @@ const Admin = () => {
                         <p className="text-xs text-muted-foreground line-clamp-3 mb-3">{e.description}</p>
                         {e.external_link && (
                           <a href={e.external_link} target="_blank" rel="noopener noreferrer" className="text-xs text-primary inline-flex items-center gap-1 mb-3">
-                            <ExternalLink className="w-3 h-3" /> {new URL(e.external_link).host}
+                            <ExternalLink className="w-3 h-3" /> {getExternalLinkHost(e.external_link)}
                           </a>
                         )}
                         <div className="flex gap-1.5 flex-wrap">

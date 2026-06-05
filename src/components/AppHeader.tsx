@@ -53,8 +53,8 @@ export const AppHeader = () => {
     <header className="sticky top-0 z-40 w-full bg-background/85 backdrop-blur-md border-b border-border">
       <div className="container mx-auto px-4 py-3 flex items-center justify-between gap-3">
         <Link to="/" className="flex items-center gap-3 min-w-0">
-          <div className="w-10 h-10 rounded-lg bg-primary flex items-center justify-center shrink-0">
-            <UFHLogo className="w-7 h-7" />
+          <div className="shrink-0">
+            <UFHLogo className="w-10 h-10" />
           </div>
           <div className="min-w-0">
             <h1 className="font-bold text-base md:text-lg text-foreground truncate">
