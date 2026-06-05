@@ -69,6 +69,10 @@ const Apply = () => {
       setDocs(docsRes.data ?? []);
       setProfile(profRes.data);
 
+      // Load eligibility rules and gate ineligible users from creating a draft.
+      const { data: rulesData } = await supabase.from("eligibility_rules").select("*").eq("workflow_id", wf.id);
+      setEligibilityRules(rulesData ?? []);
+
       // Pull related profile tables for richer auto-fill
       const [{ data: addrs }, { data: noks }, { data: fin }, { data: banks }, { data: emps }] = await Promise.all([
         (supabase.from as any)("addresses").select("*").eq("user_id", user.id),
@@ -93,6 +97,14 @@ const Apply = () => {
       // get-or-create application
       let { data: app } = await supabase.from("applications").select("*").eq("user_id", user.id).eq("workflow_id", wf.id).maybeSingle();
       if (!app) {
+        // Re-check eligibility before creating a new draft. Users without an existing app
+        // who don't meet the rules cannot start the application.
+        const elig = checkEligibility(profRes.data, roles, wf, rulesData ?? []);
+        if (!elig.eligible) {
+          setIneligible({ reasons: elig.reasons });
+          setLoading(false);
+          return;
+        }
         const { data: newApp, error: createErr } = await supabase
           .from("applications")
           .insert({ user_id: user.id, workflow_id: wf.id, status: "draft" })
@@ -106,6 +118,15 @@ const Apply = () => {
         app = newApp;
       }
       setApplication(app);
+
+      // Load any offer for this application — used to gate UFH/affidavit/offer panels so
+      // they only appear AFTER an admin explicitly sends offer documents.
+      const { data: offerRow } = await supabase
+        .from("offers")
+        .select("*")
+        .eq("application_id", app!.id)
+        .maybeSingle();
+      setOffer(offerRow ?? null);
 
       const { data: respData } = await supabase.from("application_responses").select("*").eq("application_id", app!.id);
       const respMap: Record<string, string> = {};
