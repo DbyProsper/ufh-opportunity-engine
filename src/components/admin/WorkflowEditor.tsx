@@ -333,27 +333,23 @@ export const WorkflowEditor = ({ workflowId, onClose }: Props) => {
           {/* RULES */}
           <TabsContent value="rules" className="space-y-4 mt-4">
             <div className="flex justify-between items-center">
-              <p className="text-sm text-muted-foreground">Profile-based rules block applicants when their profile doesn't match.</p>
+              <p className="text-sm text-muted-foreground">Rules that gate eligibility — postgraduate status, year of study, required student/staff number. Personal details (name, phone) are enforced at application level, not here.</p>
               <Button size="sm" onClick={addRule}><Plus className="w-3.5 h-3.5 mr-1" /> Add rule</Button>
             </div>
             {rules.length === 0 && <p className="text-sm text-muted-foreground text-center py-6">No additional rules — only built-in faculty/department/deadline checks apply.</p>}
             {rules.map((r) => (
               <Card key={r.id}>
                 <CardContent className="p-4 flex flex-wrap items-end gap-3">
-                  <div className="space-y-1 flex-1 min-w-[140px]">
-                    <Label className="text-xs">Profile field</Label>
+                  <div className="space-y-1 flex-1 min-w-[200px]">
+                    <Label className="text-xs">Rule</Label>
                     <Select defaultValue={r.rule_type} onValueChange={(v) => { updateRuleLocal(r.id, { rule_type: v }); persistRule(r.id, { rule_type: v }); }}>
                       <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent className="bg-popover">
-                        {PROFILE_FIELDS.map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}
+                        {RULE_TYPES.map((p) => <SelectItem key={p} value={p}>{RULE_TYPE_LABELS[p]}</SelectItem>)}
                       </SelectContent>
                     </Select>
                   </div>
-                  <div className="space-y-1 flex-1 min-w-[200px]">
-                    <Label className="text-xs">Required value (case-insensitive)</Label>
-                    <Input defaultValue={r.rule_value}
-                      onBlur={(e) => { updateRuleLocal(r.id, { rule_value: e.target.value }); persistRule(r.id, { rule_value: e.target.value }); }} />
-                  </div>
+                  <RuleValueInput rule={r} onChange={(v) => { updateRuleLocal(r.id, { rule_value: v }); persistRule(r.id, { rule_value: v }); }} />
                   <Button size="icon" variant="ghost" className="text-destructive" onClick={() => deleteRule(r.id)}><Trash2 className="w-3.5 h-3.5" /></Button>
                 </CardContent>
               </Card>
