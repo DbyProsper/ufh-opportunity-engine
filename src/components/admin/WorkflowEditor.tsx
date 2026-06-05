@@ -422,3 +422,57 @@ const FieldRow = ({ field, index, total, onChange, onPersist, onDelete, onMove }
     </div>
   );
 };
+
+// ---------- rule value input (typed by rule_type) ----------
+const RuleValueInput = ({ rule, onChange }: { rule: any; onChange: (v: string) => void }) => {
+  const t = rule.rule_type;
+  if (t === "has_student_number" || t === "has_staff_number") {
+    return <div className="text-xs text-muted-foreground italic min-w-[200px] flex-1">No value needed — rule is enforced when missing.</div>;
+  }
+  if (t === "is_postgraduate") {
+    return (
+      <div className="space-y-1 flex-1 min-w-[200px]">
+        <Label className="text-xs">Required</Label>
+        <Select defaultValue={rule.rule_value || "true"} onValueChange={onChange}>
+          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectContent className="bg-popover">
+            <SelectItem value="true">Yes — postgraduates only</SelectItem>
+            <SelectItem value="false">No — undergraduates only</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+    );
+  }
+  if (t === "min_year_of_study") {
+    return (
+      <div className="space-y-1 flex-1 min-w-[200px]">
+        <Label className="text-xs">Minimum year</Label>
+        <Select defaultValue={rule.rule_value || "1"} onValueChange={onChange}>
+          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectContent className="bg-popover">
+            {YEAR_OF_STUDY_OPTIONS.map((y) => <SelectItem key={y} value={y}>{y}</SelectItem>)}
+          </SelectContent>
+        </Select>
+      </div>
+    );
+  }
+  if (t === "requires_qualification_completed" || t === "requires_current_qualification") {
+    return (
+      <div className="space-y-1 flex-1 min-w-[200px]">
+        <Label className="text-xs">Qualification</Label>
+        <Select defaultValue={rule.rule_value || ""} onValueChange={onChange}>
+          <SelectTrigger><SelectValue placeholder="Select…" /></SelectTrigger>
+          <SelectContent className="bg-popover">
+            {QUALIFICATION_LEVELS.map((q) => <SelectItem key={q} value={q}>{q}</SelectItem>)}
+          </SelectContent>
+        </Select>
+      </div>
+    );
+  }
+  return (
+    <div className="space-y-1 flex-1 min-w-[200px]">
+      <Label className="text-xs">Required value</Label>
+      <Input defaultValue={rule.rule_value} onBlur={(e) => onChange(e.target.value)} />
+    </div>
+  );
+};
