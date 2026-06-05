@@ -62,7 +62,16 @@ Rules:
 - If an opportunity has an apply URL or says "apply here", "click here", "visit", "submit at <url>", set type = "external" and capture external_link.
 - Otherwise set type = "internal".
 - Set confidence between 0 and 1. Be conservative (<0.5) for vague mentions and >0.8 for clearly described opportunities with title + requirements.
-- Never invent opportunities. If the document has none, return an empty array.`;
+- Never invent opportunities. If the document has none, return an empty array.
+- Extract eligibility_hints when the requirements text mentions any of:
+  • postgraduate / honours / masters / doctoral → { rule_type: "is_postgraduate", rule_value: "true" }
+  • completed Bachelors/Honours required → { rule_type: "requires_qualification_completed", rule_value: "Bachelors" | "Honours" | ... }
+  • currently pursuing X → { rule_type: "requires_current_qualification", rule_value: "Honours" | "Masters" | ... }
+  • year 2/3/4 of study required → { rule_type: "min_year_of_study", rule_value: "2" | "3" | "4" }
+  • must be a registered student → { rule_type: "has_student_number", rule_value: "true" }
+  • staff only / staff number → { rule_type: "has_staff_number", rule_value: "true" }
+  • specific faculty/department → { rule_type: "faculty" | "department", rule_value: "<name>" }
+  Only emit hints clearly supported by the text. Otherwise return an empty list.`;
 
 function ruleBasedExtract(text: string) {
   const lines = text.split(/\n+/).map((l) => l.trim()).filter(Boolean);
