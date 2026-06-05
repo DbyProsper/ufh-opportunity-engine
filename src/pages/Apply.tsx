@@ -326,8 +326,40 @@ const Apply = () => {
     return <div className="min-h-screen bg-background"><AppHeader /><div className="container mx-auto py-12 text-center"><p>Workflow not found.</p></div></div>;
   }
 
+  if (ineligible) {
+    return (
+      <div className="min-h-screen bg-background flex flex-col">
+        <AppHeader />
+        <main className="container mx-auto px-4 py-10 max-w-2xl flex-1">
+          <BackButton to="/dashboard" label="Back to dashboard" />
+          <Card className="mt-4">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2"><AlertCircle className="w-5 h-5 text-warning" /> You're not eligible for this opportunity</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <p className="text-sm text-muted-foreground">
+                Based on your profile, you don't meet the requirements for "{workflow.name}". You won't be able to start an application until these are resolved.
+              </p>
+              <ul className="space-y-1.5">
+                {ineligible.reasons.map((r, i) => (
+                  <li key={i} className="text-sm flex items-start gap-2"><span className="text-destructive">•</span> {r}</li>
+                ))}
+              </ul>
+              <div className="flex gap-2 pt-2">
+                <Button variant="outline" onClick={() => navigate("/profile")}>Update profile</Button>
+                <Button onClick={() => navigate("/dashboard")} className="btn-gradient-primary text-primary-foreground">Back to opportunities</Button>
+              </div>
+            </CardContent>
+          </Card>
+        </main>
+      </div>
+    );
+  }
+
   const submitted = application?.status !== "draft" && application?.status !== "changes_requested";
   const editable = application?.status === "draft" || application?.status === "changes_requested";
+  // Offer-related panels are only shown after admin has explicitly sent offer docs.
+  const offerSent = !!offer && ["sent", "template_sent", "revision_requested", "signed_uploaded", "approved"].includes(offer.status);
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
@@ -513,8 +545,8 @@ const Apply = () => {
               </CardContent>
             </Card>
 
-            {/* Official UFH document downloads — only after admin approval and only for the Tutor workflow */}
-            {application.status === "approved" && /tutor/i.test(workflow?.slug || workflow?.name || "") && (
+            {/* Official UFH document downloads — only after admin has SENT offer docs (and only for Tutor) */}
+            {offerSent && /tutor/i.test(workflow?.slug || workflow?.name || "") && (
               <Card className="mt-6">
                 <CardHeader><CardTitle className="text-lg">Official UFH documents</CardTitle></CardHeader>
                 <CardContent className="flex flex-wrap gap-2">
@@ -524,14 +556,14 @@ const Apply = () => {
               </Card>
             )}
 
-            {/* Hybrid affidavit workflow — only after admin approves the application */}
-            {application.status === "approved" && (
+            {/* Affidavit and offer panels — only after admin has SENT offer documents */}
+            {offerSent && (
               <div className="mt-6">
                 <AffidavitPanel applicationId={application.id} applicantId={user.id} />
               </div>
             )}
 
-            {application.status === "approved" && (
+            {offerSent && (
               <div className="mt-6">
                 <OfferPanel applicationId={application.id} workflowId={workflow.id} applicantId={user.id} isAdmin={false} />
               </div>
@@ -583,6 +615,14 @@ const Apply = () => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {application && (application.status === "approved" || application.status === "rejected") && (
+        <ApprovalCelebration
+          applicationId={application.id}
+          workflowName={workflow.name}
+          status={application.status}
+        />
+      )}
     </div>
   );
 };
