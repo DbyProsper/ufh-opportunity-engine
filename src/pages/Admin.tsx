@@ -28,6 +28,8 @@ import { BackButton } from "@/components/BackButton";
 import { History, FileSearch } from "lucide-react";
 import { UFH_FACULTIES, UFH_FACULTY_NAMES } from "@/data/ufh";
 import { AdminManagement } from "@/components/admin/AdminManagement";
+import { Switch } from "@/components/ui/switch";
+import { ExternalLink } from "lucide-react";
 
 const Admin = () => {
   const { user, isAdmin, loading: authLoading } = useAuth();
@@ -36,6 +38,7 @@ const Admin = () => {
   const [workflows, setWorkflows] = useState<any[]>([]);
   const [applications, setApplications] = useState<any[]>([]);
   const [profiles, setProfiles] = useState<any[]>([]);
+  const [externalOpps, setExternalOpps] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [newWf, setNewWf] = useState({ name: "", slug: "", description: "" });
@@ -81,6 +84,8 @@ const Admin = () => {
       setWorkflows(wfRes.data ?? []);
       setApplications(appsRes.data ?? []);
       setProfiles(profRes.data ?? []);
+      const { data: extRes } = await supabase.from("external_opportunities" as any).select("*").order("created_at", { ascending: false });
+      setExternalOpps((extRes as any) ?? []);
       const { data: ar } = await supabase.from("user_roles").select("user_id").eq("role", "admin");
       const ids = (ar ?? []).map((r: any) => r.user_id);
       if (ids.length) {
@@ -297,6 +302,8 @@ const Admin = () => {
           onCreated={() => {
             supabase.from("workflows").select("*").order("created_at", { ascending: false })
               .then(({ data }) => setWorkflows(data ?? []));
+            supabase.from("external_opportunities" as any).select("*").order("created_at", { ascending: false })
+              .then(({ data }) => setExternalOpps((data as any) ?? []));
           }}
         />
 
@@ -571,7 +578,14 @@ const Admin = () => {
 
             <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {workflows.map((w) => (
-                <Card key={w.id}>
+                <Card
+                  key={w.id}
+                  className="group cursor-pointer hover:shadow-lg hover:border-primary/40 transition"
+                  onClick={() => setEditingWf(w.id)}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => { if (e.key === "Enter") setEditingWf(w.id); }}
+                >
                   <CardContent className="p-5">
                     <div className="flex items-start justify-between mb-2 gap-2">
                       <h3 className="font-semibold">{w.name}</h3>
@@ -579,11 +593,26 @@ const Admin = () => {
                     </div>
                     <p className="text-xs text-muted-foreground line-clamp-2 mb-3">{w.description}</p>
                     <p className="text-xs text-muted-foreground">/{w.slug}</p>
-                     <div className="flex items-center justify-between mt-3 flex-wrap gap-2">
+                     <div className="flex items-center justify-between mt-3 flex-wrap gap-2" onClick={(e) => e.stopPropagation()}>
                        <p className="text-xs text-muted-foreground">
                          {applications.filter((a) => a.workflow_id === w.id).length} applications
                        </p>
-                       <div className="flex gap-1.5">
+                       <div className="flex gap-1.5 opacity-70 group-hover:opacity-100 transition-opacity">
+                         <Button
+                           size="sm"
+                           variant={w.is_active ? "outline" : "default"}
+                           className={w.is_active ? "" : "btn-gradient-primary text-primary-foreground"}
+                           onClick={async () => {
+                             const next = !w.is_active;
+                             const { error } = await supabase.from("workflows").update({ is_active: next }).eq("id", w.id);
+                             if (error) return toast.error(error.message);
+                             setWorkflows((p) => p.map((x) => x.id === w.id ? { ...x, is_active: next } : x));
+                             toast.success(next ? "Published" : "Unpublished");
+                           }}
+                           title={w.is_active ? "Unpublish workflow" : "Publish workflow"}
+                         >
+                           {w.is_active ? "Unpublish" : "Publish"}
+                         </Button>
                          <Button size="sm" variant="outline" onClick={() => setTemplatesFor({ id: w.id, name: w.name })}>
                            <Stamp className="w-3.5 h-3.5 mr-1" /> Offer templates
                          </Button>
@@ -599,6 +628,64 @@ const Admin = () => {
                 </Card>
               ))}
             </div>
+
+            {/* External opportunity drafts/published from the bulletin */}
+            {externalOpps.length > 0 && (
+              <div className="mt-8">
+                <h3 className="text-lg font-semibold mb-3 flex items-center gap-2">
+                  <ExternalLink className="w-4 h-4 text-accent" /> External opportunities ({externalOpps.length})
+                </h3>
+                <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {externalOpps.map((e) => (
+                    <Card key={e.id} className="border-dashed">
+                      <CardContent className="p-5">
+                        <div className="flex items-start justify-between mb-2 gap-2">
+                          <h4 className="font-semibold leading-tight">{e.title}</h4>
+                          <Badge variant={e.status === "published" ? "default" : "outline"}>{e.status}</Badge>
+                        </div>
+                        {e.organization && <p className="text-xs text-muted-foreground mb-1">{e.organization}</p>}
+                        <p className="text-xs text-muted-foreground line-clamp-3 mb-3">{e.description}</p>
+                        {e.external_link && (
+                          <a href={e.external_link} target="_blank" rel="noopener noreferrer" className="text-xs text-primary inline-flex items-center gap-1 mb-3">
+                            <ExternalLink className="w-3 h-3" /> {new URL(e.external_link).host}
+                          </a>
+                        )}
+                        <div className="flex gap-1.5 flex-wrap">
+                          <Button
+                            size="sm"
+                            variant={e.status === "published" ? "outline" : "default"}
+                            className={e.status === "published" ? "" : "btn-gradient-primary text-primary-foreground"}
+                            onClick={async () => {
+                              const next = e.status === "published" ? "draft" : "published";
+                              const { error } = await supabase.from("external_opportunities" as any).update({ status: next }).eq("id", e.id);
+                              if (error) return toast.error(error.message);
+                              setExternalOpps((p) => p.map((x) => x.id === e.id ? { ...x, status: next } : x));
+                              toast.success(next === "published" ? "Published" : "Unpublished");
+                            }}
+                          >
+                            {e.status === "published" ? "Unpublish" : "Publish"}
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="text-destructive"
+                            onClick={async () => {
+                              if (!confirm(`Delete external opportunity "${e.title}"?`)) return;
+                              const { error } = await supabase.from("external_opportunities" as any).delete().eq("id", e.id);
+                              if (error) return toast.error(error.message);
+                              setExternalOpps((p) => p.filter((x) => x.id !== e.id));
+                              toast.success("Deleted");
+                            }}
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </Button>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              </div>
+            )}
           </TabsContent>
 
           <TabsContent value="access">

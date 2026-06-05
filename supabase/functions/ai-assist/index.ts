@@ -97,9 +97,16 @@ Deno.serve(async (req) => {
     const { action, payload } = await req.json();
 
     if (action === "suggest") {
-      const { field, profile, workflow } = payload ?? {};
-      const system = `You are an in-form writing copilot for a South African university opportunity application. Write in first person, formal but warm, 2-4 sentences. Use the applicant's actual profile facts when relevant. Do not invent qualifications. Output plain text only — no markdown.`;
-      const user = `Field label: ${field?.label}\nField help: ${field?.help_text ?? ""}\nOpportunity: ${workflow?.name ?? ""} — ${workflow?.description ?? ""}\nApplicant profile JSON: ${JSON.stringify(profile ?? {})}`;
+      const { field, profile, workflow, context } = payload ?? {};
+      let system: string;
+      let user: string;
+      if (context === "admin_workflow_description") {
+        system = `You help a University of Fort Hare ADMINISTRATOR write a clear, professional description for an opportunity/workflow that prospective applicants will read. Write in third person/imperative, 3-5 sentences. Cover: purpose of the opportunity, who it is for, key requirements, and expected outcomes. Formal, descriptive, no first-person, no markdown.`;
+        user = `Workflow name: ${workflow?.name ?? ""}\nExisting description (may be empty): ${workflow?.description ?? ""}\nField label: ${field?.label ?? "Workflow description"}`;
+      } else {
+        system = `You are an in-form writing copilot for a South African university opportunity application. Write in first person, formal but warm, 2-4 sentences. Use the applicant's actual profile facts when relevant. Do not invent qualifications. Output plain text only — no markdown.`;
+        user = `Field label: ${field?.label}\nField help: ${field?.help_text ?? ""}\nOpportunity: ${workflow?.name ?? ""} — ${workflow?.description ?? ""}\nApplicant profile JSON: ${JSON.stringify(profile ?? {})}`;
+      }
       const llm = await callLLM(system, user);
       const text = llm ?? ruleSuggest(field ?? { label: "this field" }, profile ?? {});
       return Response.json({ text, source: llm ? "ai" : "rules" }, { headers: corsHeaders });
@@ -107,7 +114,7 @@ Deno.serve(async (req) => {
 
     if (action === "explain_eligibility") {
       const { workflow, profile, eligible, reasons } = payload ?? {};
-      const system = `You explain eligibility decisions clearly and kindly in 2-4 sentences. If not eligible, suggest what would change the outcome. Plain text only.`;
+      const system = `You explain UFH opportunity eligibility decisions to a student or staff member clearly and kindly in 2-4 sentences. Consider the applicant's qualification (highest_qualification_completed, current_qualification), year_of_study, and that a postgraduate is anyone who has completed a Bachelors or is currently pursuing Honours/Masters/Doctorate. If not eligible, suggest what would change the outcome. Plain text only.`;
       const user = `Decision: ${eligible ? "ELIGIBLE" : "NOT ELIGIBLE"}\nReasons: ${JSON.stringify(reasons ?? [])}\nOpportunity: ${JSON.stringify(workflow ?? {})}\nApplicant: ${JSON.stringify(profile ?? {})}`;
       const llm = await callLLM(system, user);
       const text = llm ?? ruleEligibilityExplain({ workflow, eligible, reasons });
@@ -115,8 +122,10 @@ Deno.serve(async (req) => {
     }
 
     if (action === "rewrite") {
-      const { field, profile, workflow, current } = payload ?? {};
-      const system = `You polish and rewrite an applicant's draft answer for a South African university opportunity application. Keep their meaning and facts. Improve clarity, tone (formal but warm), flow and grammar. First person. 2-4 sentences. Plain text only.`;
+      const { field, profile, workflow, current, context } = payload ?? {};
+      const system = context === "admin_workflow_description"
+        ? `You polish and rewrite an ADMINISTRATOR's draft description of a UFH opportunity for prospective applicants. Keep the meaning. Improve clarity, structure, and professional tone. 3-5 sentences, third person. Plain text only.`
+        : `You polish and rewrite an applicant's draft answer for a South African university opportunity application. Keep their meaning and facts. Improve clarity, tone (formal but warm), flow and grammar. First person. 2-4 sentences. Plain text only.`;
       const user = `Field label: ${field?.label}\nField help: ${field?.help_text ?? ""}\nOpportunity: ${workflow?.name ?? ""} — ${workflow?.description ?? ""}\nApplicant profile JSON: ${JSON.stringify(profile ?? {})}\nDraft to rewrite:\n${current ?? ""}`;
       const llm = await callLLM(system, user);
       const text = llm ?? (current && String(current).trim().length > 0

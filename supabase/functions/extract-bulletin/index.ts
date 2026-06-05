@@ -34,6 +34,18 @@ const TOOL = {
               external_link: { type: "string", description: "Full URL if the bulletin says apply via a link" },
               type: { type: "string", enum: ["internal", "external"], description: "external if there is an apply URL or 'apply here/click here' phrase, otherwise internal" },
               confidence: { type: "number", description: "0-1 confidence this is a real, actionable opportunity" },
+              eligibility_hints: {
+                type: "array",
+                description: "Inferred eligibility rules from the requirements text. Use rule_type from the allowed set.",
+                items: {
+                  type: "object",
+                  properties: {
+                    rule_type: { type: "string", enum: ["is_postgraduate", "requires_qualification_completed", "requires_current_qualification", "min_year_of_study", "has_student_number", "has_staff_number", "faculty", "department"] },
+                    rule_value: { type: "string" }
+                  },
+                  required: ["rule_type", "rule_value"]
+                }
+              }
             },
             required: ["title", "type", "confidence"],
           },
@@ -50,7 +62,16 @@ Rules:
 - If an opportunity has an apply URL or says "apply here", "click here", "visit", "submit at <url>", set type = "external" and capture external_link.
 - Otherwise set type = "internal".
 - Set confidence between 0 and 1. Be conservative (<0.5) for vague mentions and >0.8 for clearly described opportunities with title + requirements.
-- Never invent opportunities. If the document has none, return an empty array.`;
+- Never invent opportunities. If the document has none, return an empty array.
+- Extract eligibility_hints when the requirements text mentions any of:
+  • postgraduate / honours / masters / doctoral → { rule_type: "is_postgraduate", rule_value: "true" }
+  • completed Bachelors/Honours required → { rule_type: "requires_qualification_completed", rule_value: "Bachelors" | "Honours" | ... }
+  • currently pursuing X → { rule_type: "requires_current_qualification", rule_value: "Honours" | "Masters" | ... }
+  • year 2/3/4 of study required → { rule_type: "min_year_of_study", rule_value: "2" | "3" | "4" }
+  • must be a registered student → { rule_type: "has_student_number", rule_value: "true" }
+  • staff only / staff number → { rule_type: "has_staff_number", rule_value: "true" }
+  • specific faculty/department → { rule_type: "faculty" | "department", rule_value: "<name>" }
+  Only emit hints clearly supported by the text. Otherwise return an empty list.`;
 
 function ruleBasedExtract(text: string) {
   const lines = text.split(/\n+/).map((l) => l.trim()).filter(Boolean);
@@ -104,7 +125,7 @@ Deno.serve(async (req) => {
     const isAdmin = (roles ?? []).some((r: any) => ["admin", "super_admin"].includes(r.role));
     if (!isAdmin) return json({ error: "Admins only" }, 403);
 
-    const { pdfBase64, mime, fallbackText } = await req.json().catch(() => ({}));
+    const { pdfBase64, mime, fallbackText, fileName, fileHash } = await req.json().catch(() => ({}));
     if (!pdfBase64 && !fallbackText) return json({ error: "Provide pdfBase64 or fallbackText" }, 400);
 
     const key = Deno.env.get("LOVABLE_API_KEY");
@@ -167,9 +188,25 @@ Deno.serve(async (req) => {
         external_link: String(o.external_link ?? ""),
         type: o.type === "external" || o.external_link ? "external" : "internal",
         confidence: typeof o.confidence === "number" ? Math.max(0, Math.min(1, o.confidence)) : 0.6,
+        eligibility_hints: Array.isArray(o.eligibility_hints) ? o.eligibility_hints : [],
       }));
 
-    return json({ ok: true, opportunities, source: opportunities.length && key ? "ai" : "rules" });
+    // Log this run for audit
+    let runId: string | null = null;
+    try {
+      const { data: runRow } = await admin.from("bulletin_runs").insert({
+        uploaded_by: user.id,
+        uploader_email: user.email ?? null,
+        file_name: String(fileName ?? "bulletin.pdf").slice(0, 255),
+        file_hash: String(fileHash ?? "unknown").slice(0, 128),
+        opportunities,
+        drafts_created: [],
+        source: key && pdfBase64 ? "ai" : "rules",
+      }).select("id").single();
+      runId = (runRow as any)?.id ?? null;
+    } catch (e) { console.error("bulletin_runs insert failed", e); }
+
+    return json({ ok: true, opportunities, run_id: runId, source: opportunities.length && key ? "ai" : "rules" });
   } catch (e) {
     console.error(e);
     return json({ error: (e as Error).message ?? "Failed" }, 500);

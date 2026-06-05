@@ -23,10 +23,12 @@ import { BackButton } from "@/components/BackButton";
 import { EventTimeline, TimelineEvent } from "@/components/EventTimeline";
 import { AIAssistantPanel } from "@/components/ai/AIAssistantPanel";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { checkEligibility } from "@/lib/eligibility";
+import { ApprovalCelebration } from "@/components/ApprovalCelebration";
 
 const Apply = () => {
   const { slug } = useParams();
-  const { user, loading: authLoading } = useAuth();
+  const { user, loading: authLoading, roles } = useAuth();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [workflow, setWorkflow] = useState<any>(null);
@@ -44,6 +46,9 @@ const Apply = () => {
   const [appEvents, setAppEvents] = useState<TimelineEvent[]>([]);
   const [activeFieldId, setActiveFieldId] = useState<string | null>(null);
   const [confirmSubmit, setConfirmSubmit] = useState(false);
+  const [ineligible, setIneligible] = useState<{ reasons: string[] } | null>(null);
+  const [eligibilityRules, setEligibilityRules] = useState<any[]>([]);
+  const [offer, setOffer] = useState<any>(null);
 
   useEffect(() => { if (!authLoading && !user) navigate("/auth"); }, [authLoading, user, navigate]);
 
@@ -63,6 +68,10 @@ const Apply = () => {
       setFields(fieldsRes.data ?? []);
       setDocs(docsRes.data ?? []);
       setProfile(profRes.data);
+
+      // Load eligibility rules and gate ineligible users from creating a draft.
+      const { data: rulesData } = await supabase.from("eligibility_rules").select("*").eq("workflow_id", wf.id);
+      setEligibilityRules(rulesData ?? []);
 
       // Pull related profile tables for richer auto-fill
       const [{ data: addrs }, { data: noks }, { data: fin }, { data: banks }, { data: emps }] = await Promise.all([
@@ -88,6 +97,14 @@ const Apply = () => {
       // get-or-create application
       let { data: app } = await supabase.from("applications").select("*").eq("user_id", user.id).eq("workflow_id", wf.id).maybeSingle();
       if (!app) {
+        // Re-check eligibility before creating a new draft. Users without an existing app
+        // who don't meet the rules cannot start the application.
+        const elig = checkEligibility(profRes.data, roles, wf, rulesData ?? []);
+        if (!elig.eligible) {
+          setIneligible({ reasons: elig.reasons });
+          setLoading(false);
+          return;
+        }
         const { data: newApp, error: createErr } = await supabase
           .from("applications")
           .insert({ user_id: user.id, workflow_id: wf.id, status: "draft" })
@@ -101,6 +118,15 @@ const Apply = () => {
         app = newApp;
       }
       setApplication(app);
+
+      // Load any offer for this application — used to gate UFH/affidavit/offer panels so
+      // they only appear AFTER an admin explicitly sends offer documents.
+      const { data: offerRow } = await supabase
+        .from("offers")
+        .select("*")
+        .eq("application_id", app!.id)
+        .maybeSingle();
+      setOffer(offerRow ?? null);
 
       const { data: respData } = await supabase.from("application_responses").select("*").eq("application_id", app!.id);
       const respMap: Record<string, string> = {};
@@ -300,8 +326,40 @@ const Apply = () => {
     return <div className="min-h-screen bg-background"><AppHeader /><div className="container mx-auto py-12 text-center"><p>Workflow not found.</p></div></div>;
   }
 
+  if (ineligible) {
+    return (
+      <div className="min-h-screen bg-background flex flex-col">
+        <AppHeader />
+        <main className="container mx-auto px-4 py-10 max-w-2xl flex-1">
+          <BackButton to="/dashboard" label="Back to dashboard" />
+          <Card className="mt-4">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2"><AlertCircle className="w-5 h-5 text-warning" /> You're not eligible for this opportunity</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <p className="text-sm text-muted-foreground">
+                Based on your profile, you don't meet the requirements for "{workflow.name}". You won't be able to start an application until these are resolved.
+              </p>
+              <ul className="space-y-1.5">
+                {ineligible.reasons.map((r, i) => (
+                  <li key={i} className="text-sm flex items-start gap-2"><span className="text-destructive">•</span> {r}</li>
+                ))}
+              </ul>
+              <div className="flex gap-2 pt-2">
+                <Button variant="outline" onClick={() => navigate("/profile")}>Update profile</Button>
+                <Button onClick={() => navigate("/dashboard")} className="btn-gradient-primary text-primary-foreground">Back to opportunities</Button>
+              </div>
+            </CardContent>
+          </Card>
+        </main>
+      </div>
+    );
+  }
+
   const submitted = application?.status !== "draft" && application?.status !== "changes_requested";
   const editable = application?.status === "draft" || application?.status === "changes_requested";
+  // Offer-related panels are only shown after admin has explicitly sent offer docs.
+  const offerSent = !!offer && ["sent", "template_sent", "revision_requested", "signed_uploaded", "approved"].includes(offer.status);
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
@@ -487,8 +545,8 @@ const Apply = () => {
               </CardContent>
             </Card>
 
-            {/* Official UFH document downloads — only after admin approval and only for the Tutor workflow */}
-            {application.status === "approved" && /tutor/i.test(workflow?.slug || workflow?.name || "") && (
+            {/* Official UFH document downloads — only after admin has SENT offer docs (and only for Tutor) */}
+            {offerSent && /tutor/i.test(workflow?.slug || workflow?.name || "") && (
               <Card className="mt-6">
                 <CardHeader><CardTitle className="text-lg">Official UFH documents</CardTitle></CardHeader>
                 <CardContent className="flex flex-wrap gap-2">
@@ -498,14 +556,14 @@ const Apply = () => {
               </Card>
             )}
 
-            {/* Hybrid affidavit workflow — only after admin approves the application */}
-            {application.status === "approved" && (
+            {/* Affidavit and offer panels — only after admin has SENT offer documents */}
+            {offerSent && (
               <div className="mt-6">
                 <AffidavitPanel applicationId={application.id} applicantId={user.id} />
               </div>
             )}
 
-            {application.status === "approved" && (
+            {offerSent && (
               <div className="mt-6">
                 <OfferPanel applicationId={application.id} workflowId={workflow.id} applicantId={user.id} isAdmin={false} />
               </div>
@@ -557,6 +615,14 @@ const Apply = () => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {application && (application.status === "approved" || application.status === "rejected") && (
+        <ApprovalCelebration
+          applicationId={application.id}
+          workflowName={workflow.name}
+          status={application.status}
+        />
+      )}
     </div>
   );
 };

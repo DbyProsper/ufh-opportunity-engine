@@ -14,6 +14,7 @@ import { UFH_FACULTIES, UFH_FACULTY_NAMES } from "@/data/ufh";
 import { useSectionAutoSave, type SaveStatus } from "@/hooks/useSectionAutoSave";
 import { SectionCard, type SectionStatus } from "@/components/profile/SectionCard";
 import { Field } from "@/components/profile/Field";
+import { YEAR_OF_STUDY_OPTIONS, QUALIFICATION_LEVELS } from "@/lib/eligibility";
 
 // ---------- Types ----------
 type Personal = {
@@ -22,6 +23,7 @@ type Personal = {
   race: string; disability: string; home_language: string;
   student_number: string; staff_number: string;
   faculty: string; department: string; qualification: string; year_of_study: string;
+  highest_qualification_completed: string; current_qualification: string;
   bio: string;
 };
 type Address = {
@@ -60,6 +62,7 @@ const ProfilePage = () => {
     race: "", disability: "", home_language: "",
     student_number: "", staff_number: "",
     faculty: "", department: "", qualification: "", year_of_study: "",
+    highest_qualification_completed: "", current_qualification: "",
     bio: "",
   });
   const [address1, setAddress1] = useState<Address>(blankAddress("home"));
@@ -106,6 +109,8 @@ const ProfilePage = () => {
           student_number: p.student_number ?? "", staff_number: p.staff_number ?? "",
           faculty: p.faculty ?? "", department: p.department ?? "",
           qualification: p.qualification ?? "", year_of_study: p.year_of_study ?? "",
+          highest_qualification_completed: (p as any).highest_qualification_completed ?? "",
+          current_qualification: (p as any).current_qualification ?? "",
           bio: p.bio ?? "",
         });
         setCvPath((p as any).cv_path ?? null);
@@ -593,8 +598,31 @@ const ProfilePage = () => {
                   </SelectContent>
                 </Select>
               </Field>
-              <Field id="qualification" label="Qualification / Programme" value={personal.qualification} onChange={(v) => setPersonal((p) => ({ ...p, qualification: v }))} placeholder="e.g. BSc Computer Science" />
-              <Field id="year_of_study" label="Year of Study" value={personal.year_of_study} onChange={(v) => setPersonal((p) => ({ ...p, year_of_study: v }))} placeholder="e.g. 3rd year" />
+              <Field id="qualification" label="Qualification / Programme (legacy)" value={personal.qualification} onChange={(v) => setPersonal((p) => ({ ...p, qualification: v }))} placeholder="e.g. BSc Computer Science" />
+              <Field id="current_qualification" label="Currently Pursuing" value={personal.current_qualification} onChange={(v) => setPersonal((p) => ({ ...p, current_qualification: v }))}>
+                <Select value={personal.current_qualification} onValueChange={(v) => setPersonal((p) => ({ ...p, current_qualification: v }))}>
+                  <SelectTrigger><SelectValue placeholder="Select qualification you're pursuing" /></SelectTrigger>
+                  <SelectContent className="bg-popover z-50">
+                    {QUALIFICATION_LEVELS.map((q) => <SelectItem key={q} value={q}>{q}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </Field>
+              <Field id="highest_qualification_completed" label="Highest Qualification Completed" value={personal.highest_qualification_completed} onChange={(v) => setPersonal((p) => ({ ...p, highest_qualification_completed: v }))}>
+                <Select value={personal.highest_qualification_completed} onValueChange={(v) => setPersonal((p) => ({ ...p, highest_qualification_completed: v }))}>
+                  <SelectTrigger><SelectValue placeholder="Select highest completed" /></SelectTrigger>
+                  <SelectContent className="bg-popover z-50">
+                    {QUALIFICATION_LEVELS.map((q) => <SelectItem key={q} value={q}>{q}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </Field>
+              <Field id="year_of_study" label="Year of Study" value={personal.year_of_study} onChange={(v) => setPersonal((p) => ({ ...p, year_of_study: v }))}>
+                <Select value={personal.year_of_study} onValueChange={(v) => setPersonal((p) => ({ ...p, year_of_study: v }))}>
+                  <SelectTrigger><SelectValue placeholder="Select year" /></SelectTrigger>
+                  <SelectContent className="bg-popover z-50">
+                    {YEAR_OF_STUDY_OPTIONS.map((y) => <SelectItem key={y} value={y}>{y}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </Field>
               <Field id="bio" label="Short Bio" value={personal.bio} onChange={(v) => setPersonal((p) => ({ ...p, bio: v }))} textarea className="sm:col-span-2" placeholder="2–3 sentences about your background, interests and goals." />
             </div>
           </SectionCard>
