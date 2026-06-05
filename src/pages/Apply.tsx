@@ -23,10 +23,13 @@ import { BackButton } from "@/components/BackButton";
 import { EventTimeline, TimelineEvent } from "@/components/EventTimeline";
 import { AIAssistantPanel } from "@/components/ai/AIAssistantPanel";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { checkEligibility } from "@/lib/eligibility";
+import { useAuth } from "@/contexts/AuthContext";
+import { ApprovalCelebration } from "@/components/ApprovalCelebration";
 
 const Apply = () => {
   const { slug } = useParams();
-  const { user, loading: authLoading } = useAuth();
+  const { user, loading: authLoading, roles } = useAuth();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [workflow, setWorkflow] = useState<any>(null);
@@ -44,6 +47,9 @@ const Apply = () => {
   const [appEvents, setAppEvents] = useState<TimelineEvent[]>([]);
   const [activeFieldId, setActiveFieldId] = useState<string | null>(null);
   const [confirmSubmit, setConfirmSubmit] = useState(false);
+  const [ineligible, setIneligible] = useState<{ reasons: string[] } | null>(null);
+  const [eligibilityRules, setEligibilityRules] = useState<any[]>([]);
+  const [offer, setOffer] = useState<any>(null);
 
   useEffect(() => { if (!authLoading && !user) navigate("/auth"); }, [authLoading, user, navigate]);
 
