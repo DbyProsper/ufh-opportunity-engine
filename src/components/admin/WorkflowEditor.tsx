@@ -14,6 +14,7 @@ import { toast } from "sonner";
 import { ArrowDown, ArrowUp, FileText, GripVertical, Layers, ListChecks, Loader2, Plus, ScrollText, Sparkles, Trash2, Wand2 } from "lucide-react";
 import { UFH_FACULTIES, UFH_FACULTY_NAMES } from "@/data/ufh";
 import { generateSuggestion, rewriteSuggestion } from "@/lib/ai";
+import { RULE_TYPES, RULE_TYPE_LABELS, YEAR_OF_STUDY_OPTIONS, QUALIFICATION_LEVELS } from "@/lib/eligibility";
 
 const FIELD_TYPES = ["text", "textarea", "select", "multiselect", "date", "file", "number", "email", "phone"] as const;
 const PROFILE_FIELDS = ["full_name", "email", "phone", "student_number", "staff_number", "faculty", "department", "qualification", "year_of_study", "address", "bio"];
@@ -38,8 +39,8 @@ export const WorkflowEditor = ({ workflowId, onClose }: Props) => {
       const field = { id: key, label, type: "textarea" };
       const ctxWorkflow = { name: wf?.name ?? "Workflow", description: wf?.description ?? "" };
       const res = current?.trim()
-        ? await rewriteSuggestion(field, current, null, ctxWorkflow as any)
-        : await generateSuggestion(field, null, ctxWorkflow as any, { regenerate: false });
+        ? await rewriteSuggestion(field, current, null, ctxWorkflow as any, "admin_workflow_description")
+        : await generateSuggestion(field, null, ctxWorkflow as any, { regenerate: false, context: "admin_workflow_description" });
       if (res?.text) {
         onResult(res.text);
         toast.success(current?.trim() ? "Rewritten with AI" : "AI suggestion inserted");
