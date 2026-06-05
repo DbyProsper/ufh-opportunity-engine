@@ -24,7 +24,6 @@ import { EventTimeline, TimelineEvent } from "@/components/EventTimeline";
 import { AIAssistantPanel } from "@/components/ai/AIAssistantPanel";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { checkEligibility } from "@/lib/eligibility";
-import { useAuth } from "@/contexts/AuthContext";
 import { ApprovalCelebration } from "@/components/ApprovalCelebration";
 
 const Apply = () => {
