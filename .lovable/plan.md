@@ -1,64 +1,67 @@
+# UFH Opportunity Hub — Round 5 Improvements
 
-# Round 4 — UFH Opportunity Hub Improvements
+This round bundles 17 related fixes spanning the bulletin extractor, eligibility engine, profile, dashboard, admin workflow management, and AI assistant. Grouped into 6 themes so each migration / file touches once.
 
-This plan groups 20+ requested changes into themed batches. Each item is concrete and scoped.
+## 1. Bulletin Extraction – auditing, re-runs, externals, publish
 
-## 1. Registration & Role Selection
-- Add a role selector on Auth signup form: **Student / Staff / Admin** (Admin requires invite — show as disabled or hidden behind code; default offer Student/Staff only, Admin requested via separate flow).
-- Pass selected role into `signUp` metadata and update `handle_new_user()` trigger to read `raw_user_meta_data->>'role'` and assign accordingly (fall back to `student`).
-- After sign-in, redirect: admin→`/admin`, others→`/dashboard`.
+- Add `bulletin_runs` table (id, uploaded_by, file_name, file_hash, created_at, opportunities jsonb, drafts_created jsonb). Admin-only RLS.
+- `extract-bulletin` writes a row per run and returns `run_id`.
+- `BulletinExtractor`:
+  - Persist last uploaded PDF in component state so "Re-run extraction" works without re-upload.
+  - Show prior runs for same hash + diff view (added/removed titles).
+  - Extract eligibility hints (`requires_honours`, `requires_masters`, `target_role`, etc.) so created workflows get auto-eligibility rules.
+  - "Create draft" for **external** opportunities now inserts into `external_opportunities` with `status='draft'` and logs the draft id to the run.
+  - Internal drafts default to `is_active=false` (draft) instead of immediate publish.
+- New "Bulletin runs" sub-tab in Admin → shows runs + their created drafts.
 
-## 2. Profile Page Overhaul
-- **Race field**: replace free text with `Select` (Black African, Coloured, Indian/Asian, White, Other, Prefer not to say) — SA EE Act categories.
-- **Postal = Home toggle**: when on, postal hidden + auto-marked complete if home complete; persist as `addresses.kind='postal'` mirror or a flag in `profile_extra`.
-- **Next of kin "same as home address" toggle**: hide NOK address inputs, copy home address on save.
-- **Employment**: remove `supervisor_name` and `supervisor_contact` inputs (keep columns, just hide).
-- **Staff number toggle**: "I have a staff number" checkbox; only show input when checked; don't block completion when unchecked.
-- **Placeholders & examples**: add helpful placeholders/examples to every input across all profile sections.
-- **Completion counter**: rewrite to include all 7 sections (Personal, Address, NoK, Employment, Banking, Financial, Documents) with both `n/n sections` AND percentage badge.
-- **Missing info nudge**: banner on dashboard listing missing profile sections with "Complete now" CTA.
+## 2. Workflow Draft Publish + External Drafts in list
 
-## 3. CV Parser Improvements
-- Update `parse-cv` edge function prompt to extract structured data for: personal, addresses, next_of_kin, employment, banking, financial, qualifications/education.
-- Return JSON shaped to upsert across all those tables.
-- Client-side: after parse, upsert into each table (not just `profiles`).
+- `workflows.is_active=false` = draft. Admin workflow list shows Drafts section with **Publish** button (sets `is_active=true`).
+- Admin workflow list also includes `external_opportunities` (both draft and published) with their own Publish/Edit/Delete actions.
+- Public Dashboard only shows `is_active=true` workflows and `status='published'` external opps (already correct for externals; add filter for workflow drafts on user side).
 
-## 4. Dashboard Cleanup
-- Remove "Recent Activity" and "Latest Audit Events" widgets from `Dashboard.tsx` for non-admin users entirely.
-- Move them to `Admin.tsx` (already partially there — consolidate).
+## 3. Eligibility Engine Overhaul
 
-## 5. Messaging Page
-- New route `/messages` with list of application threads; per-thread view embeds existing `MessageThread`.
-- Add a "Messages" icon (MessageSquare) to header nav with unread badge.
+- Profile additions: `highest_qualification_completed` (e.g. Matric, Diploma, Bachelors, Honours, Masters, PhD) and `current_qualification` (what they're pursuing). `year_of_study` becomes a Select: 1, 2, 3, 4, Honours, Masters, Doctorate, Professor.
+- Add `is_postgraduate` derivation: completed Bachelors OR currently in Honours/Masters/Doctorate.
+- Rewrite `src/lib/eligibility.ts`:
+  - New rule types: `requires_qualification_completed`, `requires_current_qualification`, `min_year_of_study`, `has_student_number`, `has_staff_number`, `is_postgraduate`, `target_role`.
+  - Remove name/phone-style "rules" (those are app-level required fields).
+  - Returns positive matches + blocking reasons + score (existing) but with the richer rule set.
+- `EligibilityExplainer` updated language for postgrad logic.
+- Admin `EligibilityRules` UI: dropdown of meaningful rule types (no free-text on `full_name`); shows friendly labels.
+- Block ineligible users from starting an application: `Apply.tsx` checks eligibility on mount; if not eligible, shows message + back button (no draft created). Opportunity card "Apply" disabled when ineligible, with tooltip.
 
-## 6. Application Form Fixes
-- **Required documents**: fix step assignment so documents render in their own step, not the Review step. Audit `Apply.tsx` step grouping.
-- **Submit confirmation**: `AlertDialog` "Are you sure all your information is correct?" before final submit.
-- **Hide offer documents pre-approval**: in `OfferPanel.tsx` only render when an `offer` row exists AND `status IN ('sent','template_sent','approved',...)` — never show templates from other workflows. Confirm offer queries are scoped to `application_id`.
-- Verify each workflow's offer documents are per-workflow (already are — `workflow_offer_templates.workflow_id`). Audit `SendOfferDialog` template list filter.
+## 4. Opportunity Details + Apply gating
 
-## 7. AI Assistant Enhancements
-- **Auto-save suggestions per field**: store in `localStorage` keyed by `applicationId:fieldId`; restore on mount.
-- **Rewrite-to-match button**: new action calling `ai-assist` with mode `rewrite` using current field value + workflow context.
-- **Keyboard shortcuts**: Ctrl/Cmd+G generate, Ctrl/Cmd+I insert, Ctrl/Cmd+R regenerate; show hints in tooltip.
+- New `OpportunityDetailsDialog` opens when clicking a card on Dashboard. Shows description, requirements, deadline, eligibility check (re-uses `EligibilityExplainer` content inline), and primary CTA "Start application" (disabled if ineligible) or "Apply externally" for external opps.
+- "Apply externally" logs an `external_application_clicks` row (user_id, opportunity_id, clicked_at) and opens link in new tab.
 
-## 8. Eligibility Caching
-- Cache `(user_id, workflow_id) → explanation` in `sessionStorage` (TTL 10 min). Open modal instantly when cached.
+## 5. Dashboard polish + Approval celebration
 
-## 9. Admin Improvements
-- **Delete workflows**: add delete button with confirm + cascade (workflow_fields, steps, documents, eligibility_rules, offer_templates).
-- **Ranking explainer**: extend `rankApplications` to return per-document and per-profile-section contributions; render them in `RankingExplainer`.
-- **Review notes button**: add visible "Review Notes" toggle/button in `ApplicationDetail.tsx` that opens an inline textarea bound to `applications.review_notes`, admin-only.
+- Make stat cards clickable: "My applications" scrolls to / filters Applications section; "Unread messages" → /messages (existing); "Available opportunities" → opportunities section.
+- Application withdraw: only allow when `status='submitted'` (not `under_review`/`approved`/`rejected`). Update `withdraw_application` RPC + UI button visibility.
+- When an application transitions to `approved` or `rejected`, show a one-time celebration/condolence dialog using `framer-motion` confetti-style animation. Track "seen" in localStorage keyed by application id.
+- Hide offer/affidavit UI on dashboard unless `offers` row exists with `status IN ('sent','template_sent','revision_requested','signed_uploaded','approved')` — i.e. only after admin explicitly sends.
 
----
+## 6. AI Assistant — admin context
 
-## Technical notes
-- DB migrations needed: `handle_new_user` trigger update for role meta.
-- No schema changes for race (still text) — enforced in UI.
-- All UI changes preserve existing design tokens.
+- `ai-assist` action `suggest` accepts a `context` field. When `context='admin_workflow_description'`, system prompt becomes: "You help a UFH administrator write a clear, professional opportunity/workflow description for prospective applicants. 3-5 sentences, formal, descriptive of purpose, requirements, and outcomes."
+- `WorkflowEditor` + `AIWorkflowDialog` pass that context.
 
-## Out-of-scope (defer)
-- Admin invitation flow for the "Admin" role choice (will use code/secret check).
-- Full real-time messaging socket layer (use existing supabase realtime already set up).
+## 7. Admin workflow cards clickable
 
-Approve to proceed; I'll batch implementation in parallel where safe.
+- Whole card opens editor; hover reveals quick actions (Publish/Unpublish, Duplicate, Delete) without nested click conflicts.
+
+## Technical Notes
+
+- 1 migration: new tables `bulletin_runs`, `external_application_clicks`, profile column additions, updated `withdraw_application`. Includes GRANTs.
+- Updated edge function `extract-bulletin` for run logging + eligibility hints.
+- Updated edge function `ai-assist` for admin context.
+- ~12 frontend files touched. No breaking schema changes for existing data; new columns nullable with sensible defaults.
+
+## Out of scope
+
+- Email notifications for bulletin runs (audit log only).
+- Diff visualization beyond title-level add/remove (no inline content diff).
+- Rich confetti library — use lightweight inline CSS/framer-motion.
