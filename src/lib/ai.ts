@@ -17,13 +17,13 @@ export async function generateSuggestion(
   field: { id?: string; label: string; help_text?: string; type?: string },
   profile: Profile | null,
   workflow?: { name: string; description?: string | null } | null,
-  opts: { regenerate?: boolean } = {}
+  opts: { regenerate?: boolean; context?: string } = {}
 ): Promise<SuggestionResult> {
-  const k = key(["suggest", field.label, profile?.id, workflow?.name, opts.regenerate ? Date.now() : 0]);
+  const k = key(["suggest", field.label, profile?.id, workflow?.name, opts.context ?? "", opts.regenerate ? Date.now() : 0]);
   if (!opts.regenerate && cache.has(k)) return cache.get(k);
   try {
     const { data, error } = await supabase.functions.invoke("ai-assist", {
-      body: { action: "suggest", payload: { field, profile, workflow } },
+      body: { action: "suggest", payload: { field, profile, workflow, context: opts.context } },
     });
     if (error) throw error;
     const result = { text: (data as any).text, source: (data as any).source } as SuggestionResult;
@@ -39,11 +39,12 @@ export async function rewriteSuggestion(
   field: { id?: string; label: string; help_text?: string; type?: string },
   current: string,
   profile: Profile | null,
-  workflow?: { name: string; description?: string | null } | null
+  workflow?: { name: string; description?: string | null } | null,
+  context?: string,
 ): Promise<SuggestionResult> {
   try {
     const { data, error } = await supabase.functions.invoke("ai-assist", {
-      body: { action: "rewrite", payload: { field, profile, workflow, current } },
+      body: { action: "rewrite", payload: { field, profile, workflow, current, context } },
     });
     if (error) throw error;
     return { text: (data as any).text, source: (data as any).source } as SuggestionResult;
