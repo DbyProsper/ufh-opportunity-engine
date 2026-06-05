@@ -1,10 +1,10 @@
-import { Fragment, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Sparkles, Upload, ExternalLink, FileText, Trash2, Pencil, Check, AlertCircle } from "lucide-react";
+import { Loader2, Sparkles, Upload, ExternalLink, FileText, Trash2, Pencil, Check, AlertCircle, RotateCcw, History } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/table";
 import { toast } from "sonner";
@@ -19,6 +19,7 @@ interface Opp {
   external_link: string;
   type: "internal" | "external";
   confidence: number;
+  eligibility_hints?: { rule_type: string; rule_value: string }[];
   _state?: "pending" | "saved" | "discarded";
 }
 
@@ -32,46 +33,92 @@ const fileToBase64 = (file: File) =>
     r.readAsDataURL(file);
   });
 
+const hashString = async (s: string) => {
+  const data = new TextEncoder().encode(s);
+  const buf = await crypto.subtle.digest("SHA-256", data);
+  return Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, "0")).join("");
+};
+
 export const BulletinExtractor = ({ open, onClose, onCreated }: Props) => {
   const [file, setFile] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
   const [opps, setOpps] = useState<Opp[]>([]);
   const [editingIdx, setEditingIdx] = useState<number | null>(null);
   const [savingIdx, setSavingIdx] = useState<number | null>(null);
+  const [pdfBase64, setPdfBase64] = useState<string | null>(null);
+  const [pdfHash, setPdfHash] = useState<string | null>(null);
+  const [runId, setRunId] = useState<string | null>(null);
+  const [priorRuns, setPriorRuns] = useState<any[]>([]);
+  const [showHistory, setShowHistory] = useState(false);
+  const [allRuns, setAllRuns] = useState<any[]>([]);
 
-  const reset = () => { setFile(null); setOpps([]); setEditingIdx(null); };
+  const reset = () => { setFile(null); setOpps([]); setEditingIdx(null); setPdfBase64(null); setPdfHash(null); setRunId(null); setPriorRuns([]); };
+
+  useEffect(() => {
+    if (!open) return;
+    supabase.from("bulletin_runs" as any).select("*").order("created_at", { ascending: false }).limit(20)
+      .then(({ data }) => setAllRuns((data as any) ?? []));
+  }, [open]);
 
   const analyse = async () => {
-    if (!file) return toast.error("Choose a PDF first");
-    if (file.type !== "application/pdf") return toast.error("Only PDF files are supported");
-    if (file.size > 20 * 1024 * 1024) return toast.error("Max 20 MB");
+    let b64 = pdfBase64;
+    let hash = pdfHash;
+    let fname = file?.name;
+    if (!b64) {
+      if (!file) return toast.error("Choose a PDF first");
+      if (file.type !== "application/pdf") return toast.error("Only PDF files are supported");
+      if (file.size > 20 * 1024 * 1024) return toast.error("Max 20 MB");
+      b64 = await fileToBase64(file);
+      hash = await hashString(b64);
+      setPdfBase64(b64); setPdfHash(hash);
+      // load prior runs for same hash so the admin can compare
+      const { data: prior } = await supabase.from("bulletin_runs" as any)
+        .select("*").eq("file_hash", hash).order("created_at", { ascending: false });
+      setPriorRuns((prior as any) ?? []);
+    }
     setBusy(true);
     setOpps([]);
     try {
-      const pdfBase64 = await fileToBase64(file);
       const { data, error } = await supabase.functions.invoke("extract-bulletin", {
-        body: { pdfBase64, mime: file.type },
+        body: { pdfBase64: b64, mime: "application/pdf", fileName: fname, fileHash: hash },
       });
       if (error) throw error;
       const list = ((data as any)?.opportunities ?? []) as Opp[];
+      setRunId((data as any)?.run_id ?? null);
       if (!list.length) {
         toast.warning("No opportunities found. Try a different bulletin.");
       } else {
         toast.success(`Extracted ${list.length} opportunit${list.length === 1 ? "y" : "ies"}`);
       }
       setOpps(list.map((o) => ({ ...o, _state: "pending" })));
+      // refresh runs list
+      supabase.from("bulletin_runs" as any).select("*").order("created_at", { ascending: false }).limit(20)
+        .then(({ data }) => setAllRuns((data as any) ?? []));
     } catch (e: any) {
       toast.error(e?.message ?? "Extraction failed");
     } finally { setBusy(false); }
   };
 
+  // Diff with most recent prior run (other than the current one)
+  const diff = (() => {
+    const prev = priorRuns.find((r) => r.id !== runId);
+    if (!prev) return null;
+    const prevTitles = new Set(((prev.opportunities as Opp[]) ?? []).map((o) => o.title.toLowerCase()));
+    const currTitles = new Set(opps.map((o) => o.title.toLowerCase()));
+    const added = [...currTitles].filter((t) => !prevTitles.has(t));
+    const removed = [...prevTitles].filter((t) => !currTitles.has(t));
+    return { added, removed, prev };
+  })();
+
   const saveOne = async (i: number) => {
     const o = opps[i];
     if (!o) return;
     setSavingIdx(i);
+    let createdId: string | null = null;
+    let createdKind: "external" | "internal" = o.type;
     try {
       if (o.type === "external") {
-        const { error } = await supabase.from("external_opportunities" as any).insert({
+        const { data: ins, error } = await supabase.from("external_opportunities" as any).insert({
           title: o.title,
           organization: o.organization,
           description: o.description,
@@ -80,8 +127,9 @@ export const BulletinExtractor = ({ open, onClose, onCreated }: Props) => {
           external_link: o.external_link,
           confidence: o.confidence,
           status: "draft",
-        });
+        }).select().single();
         if (error) throw error;
+        createdId = (ins as any)?.id ?? null;
       } else {
         // Build a workflow from the opportunity via the AI generator
         const prompt = `Create an application workflow for: ${o.title}.
@@ -103,11 +151,27 @@ Include the standard personal/identity/academic/address fields plus any extra st
         if (error) throw error;
         const wf = (data as any)?.workflow;
         if (!wf) throw new Error("Workflow not created");
+        createdId = wf.id;
         // Force draft
         await supabase.from("workflows").update({ is_active: false }).eq("id", wf.id);
+        // Add eligibility rule hints from extractor
+        if (o.eligibility_hints?.length) {
+          const rows = o.eligibility_hints.map((h) => ({
+            workflow_id: wf.id, rule_type: h.rule_type, rule_value: h.rule_value,
+          }));
+          await supabase.from("eligibility_rules").insert(rows as any);
+        }
       }
       setOpps((p) => p.map((x, j) => j === i ? { ...x, _state: "saved" } : x));
       toast.success(`Saved "${o.title}" as draft`);
+
+      // Append the created draft id to the bulletin_runs row for traceability
+      if (runId && createdId) {
+        const { data: row } = await supabase.from("bulletin_runs" as any).select("drafts_created").eq("id", runId).maybeSingle();
+        const drafts = ((row as any)?.drafts_created ?? []) as any[];
+        drafts.push({ id: createdId, type: createdKind, title: o.title, created_at: new Date().toISOString() });
+        await supabase.from("bulletin_runs" as any).update({ drafts_created: drafts }).eq("id", runId);
+      }
       onCreated?.();
     } catch (e: any) {
       toast.error(e?.message ?? "Save failed");
