@@ -450,6 +450,42 @@ export type Database = {
         }
         Relationships: []
       }
+      bulletin_runs: {
+        Row: {
+          created_at: string
+          drafts_created: Json
+          file_hash: string
+          file_name: string
+          id: string
+          opportunities: Json
+          source: string
+          uploaded_by: string | null
+          uploader_email: string | null
+        }
+        Insert: {
+          created_at?: string
+          drafts_created?: Json
+          file_hash: string
+          file_name: string
+          id?: string
+          opportunities?: Json
+          source?: string
+          uploaded_by?: string | null
+          uploader_email?: string | null
+        }
+        Update: {
+          created_at?: string
+          drafts_created?: Json
+          file_hash?: string
+          file_name?: string
+          id?: string
+          opportunities?: Json
+          source?: string
+          uploaded_by?: string | null
+          uploader_email?: string | null
+        }
+        Relationships: []
+      }
       eligibility_rules: {
         Row: {
           created_at: string
@@ -526,6 +562,38 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      external_application_clicks: {
+        Row: {
+          created_at: string
+          external_link: string | null
+          external_opportunity_id: string | null
+          id: string
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          external_link?: string | null
+          external_opportunity_id?: string | null
+          id?: string
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          external_link?: string | null
+          external_opportunity_id?: string | null
+          id?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "external_application_clicks_external_opportunity_id_fkey"
+            columns: ["external_opportunity_id"]
+            isOneToOne: false
+            referencedRelation: "external_opportunities"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       external_opportunities: {
         Row: {
@@ -928,6 +996,7 @@ export type Database = {
           avatar_url: string | null
           bio: string | null
           created_at: string
+          current_qualification: string | null
           cv_path: string | null
           cv_text: string | null
           cv_uploaded_at: string | null
@@ -938,6 +1007,7 @@ export type Database = {
           faculty: string | null
           full_name: string | null
           gender: string | null
+          highest_qualification_completed: string | null
           home_language: string | null
           id: string
           id_number: string | null
@@ -957,6 +1027,7 @@ export type Database = {
           avatar_url?: string | null
           bio?: string | null
           created_at?: string
+          current_qualification?: string | null
           cv_path?: string | null
           cv_text?: string | null
           cv_uploaded_at?: string | null
@@ -967,6 +1038,7 @@ export type Database = {
           faculty?: string | null
           full_name?: string | null
           gender?: string | null
+          highest_qualification_completed?: string | null
           home_language?: string | null
           id: string
           id_number?: string | null
@@ -986,6 +1058,7 @@ export type Database = {
           avatar_url?: string | null
           bio?: string | null
           created_at?: string
+          current_qualification?: string | null
           cv_path?: string | null
           cv_text?: string | null
           cv_uploaded_at?: string | null
@@ -996,6 +1069,7 @@ export type Database = {
           faculty?: string | null
           full_name?: string | null
           gender?: string | null
+          highest_qualification_completed?: string | null
           home_language?: string | null
           id?: string
           id_number?: string | null
