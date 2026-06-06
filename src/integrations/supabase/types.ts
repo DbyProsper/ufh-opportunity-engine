@@ -597,6 +597,7 @@ export type Database = {
       }
       external_opportunities: {
         Row: {
+          category: string | null
           confidence: number | null
           created_at: string
           created_by: string | null
@@ -604,6 +605,7 @@ export type Database = {
           description: string | null
           external_link: string | null
           id: string
+          image_url: string | null
           organization: string | null
           requirements: string | null
           source: string | null
@@ -612,6 +614,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          category?: string | null
           confidence?: number | null
           created_at?: string
           created_by?: string | null
@@ -619,6 +622,7 @@ export type Database = {
           description?: string | null
           external_link?: string | null
           id?: string
+          image_url?: string | null
           organization?: string | null
           requirements?: string | null
           source?: string | null
@@ -627,6 +631,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          category?: string | null
           confidence?: number | null
           created_at?: string
           created_by?: string | null
@@ -634,6 +639,7 @@ export type Database = {
           description?: string | null
           external_link?: string | null
           id?: string
+          image_url?: string | null
           organization?: string | null
           requirements?: string | null
           source?: string | null
@@ -1155,16 +1161,19 @@ export type Database = {
       user_settings: {
         Row: {
           notif_sound_enabled: boolean
+          theme: string
           updated_at: string
           user_id: string
         }
         Insert: {
           notif_sound_enabled?: boolean
+          theme?: string
           updated_at?: string
           user_id: string
         }
         Update: {
           notif_sound_enabled?: boolean
+          theme?: string
           updated_at?: string
           user_id?: string
         }
@@ -1344,6 +1353,7 @@ export type Database = {
       }
       workflows: {
         Row: {
+          category: string | null
           created_at: string
           created_by: string | null
           deadline: string | null
@@ -1352,6 +1362,7 @@ export type Database = {
           faculty: string | null
           icon: string | null
           id: string
+          image_url: string | null
           is_active: boolean
           name: string
           slug: string
@@ -1359,6 +1370,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          category?: string | null
           created_at?: string
           created_by?: string | null
           deadline?: string | null
@@ -1367,6 +1379,7 @@ export type Database = {
           faculty?: string | null
           icon?: string | null
           id?: string
+          image_url?: string | null
           is_active?: boolean
           name: string
           slug: string
@@ -1374,6 +1387,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          category?: string | null
           created_at?: string
           created_by?: string | null
           deadline?: string | null
@@ -1382,6 +1396,7 @@ export type Database = {
           faculty?: string | null
           icon?: string | null
           id?: string
+          image_url?: string | null
           is_active?: boolean
           name?: string
           slug?: string
