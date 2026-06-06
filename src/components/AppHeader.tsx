@@ -10,8 +10,9 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { LayoutDashboard, LogOut, Shield, User as UserIcon, Bell, MessageSquare } from "lucide-react";
+import { LayoutDashboard, LogOut, Shield, User as UserIcon, Bell, MessageSquare, Settings as SettingsIcon } from "lucide-react";
 import { NotificationBell } from "./NotificationBell";
+import { ThemeSwitcher } from "./ThemeSwitcher";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Badge } from "@/components/ui/badge";
@@ -70,6 +71,7 @@ export const AppHeader = () => {
           {user ? (
             <>
               <NotificationBell />
+              <ThemeSwitcher />
               <Link to="/messages" className="hidden sm:inline-flex relative">
                 <Button variant="ghost" size="sm" className="gap-2">
                   <MessageSquare className="w-4 h-4" />
@@ -112,6 +114,9 @@ export const AppHeader = () => {
                   </DropdownMenuItem>
                   <DropdownMenuItem asChild>
                     <Link to="/messages"><MessageSquare className="w-4 h-4 mr-2" />Messages{unreadMsgs > 0 ? ` (${unreadMsgs})` : ""}</Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link to="/settings"><SettingsIcon className="w-4 h-4 mr-2" />Settings</Link>
                   </DropdownMenuItem>
                   {isAdmin && (
                     <DropdownMenuItem asChild>
