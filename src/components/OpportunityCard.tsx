@@ -8,6 +8,7 @@ import * as Icons from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { EligibilityExplainer } from "@/components/ai/EligibilityExplainer";
 import { OpportunityDetailsDialog } from "@/components/OpportunityDetailsDialog";
+import { OpportunityImage } from "@/components/OpportunityImage";
 import type { Tables } from "@/integrations/supabase/types";
 
 interface Props {
@@ -37,8 +38,15 @@ export const OpportunityCard = ({ workflow, eligible, reasons, applicationStatus
         tabIndex={0}
         onKeyDown={(e) => { if (e.key === "Enter") setOpen(true); }}
       >
+        <OpportunityImage
+          image_url={(workflow as any).image_url}
+          category={(workflow as any).category}
+          name={workflow.name}
+          description={workflow.description}
+          aspect="video"
+        />
         <div className="absolute inset-x-0 top-0 h-1 btn-gradient-primary" />
-        <CardContent className="p-6 pt-7">
+        <CardContent className="p-6">
           <div className="flex items-start justify-between gap-3 mb-4">
             <div className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 ${
               eligible ? "bg-accent/15 text-accent" : "bg-muted text-muted-foreground"
