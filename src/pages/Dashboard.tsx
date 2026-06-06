@@ -15,6 +15,7 @@ import { toast } from "sonner";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { formatDistanceToNow } from "date-fns";
 import { OpportunityDetailsDialog } from "@/components/OpportunityDetailsDialog";
+import { OpportunityImage } from "@/components/OpportunityImage";
 import { Badge } from "@/components/ui/badge";
 
 type Workflow = Tables<"workflows">;
@@ -269,7 +270,14 @@ const Dashboard = () => {
               </h3>
               <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 {externals.map((e) => (
-                  <Card key={e.id} className="cursor-pointer hover:shadow-lg transition" onClick={() => setExternalOpen(e)}>
+                  <Card key={e.id} className="cursor-pointer hover:shadow-lg transition overflow-hidden" onClick={() => setExternalOpen(e)}>
+                    <OpportunityImage
+                      image_url={(e as any).image_url}
+                      category={(e as any).category}
+                      name={e.title}
+                      description={e.description}
+                      aspect="video"
+                    />
                     <CardContent className="p-5">
                       <div className="flex items-start justify-between gap-2 mb-2">
                         <h4 className="font-semibold leading-tight">{e.title}</h4>

@@ -15,6 +15,7 @@ import { ArrowDown, ArrowUp, FileText, GripVertical, Layers, ListChecks, Loader2
 import { UFH_FACULTIES, UFH_FACULTY_NAMES } from "@/data/ufh";
 import { generateSuggestion, rewriteSuggestion } from "@/lib/ai";
 import { RULE_TYPES, RULE_TYPE_LABELS, YEAR_OF_STUDY_OPTIONS, QUALIFICATION_LEVELS } from "@/lib/eligibility";
+import { CATEGORIES, CATEGORY_LABELS, resolveOpportunityImage } from "@/lib/opportunityImages";
 
 const FIELD_TYPES = ["text", "textarea", "select", "multiselect", "date", "file", "number", "email", "phone"] as const;
 const PROFILE_FIELDS = ["full_name", "email", "phone", "student_number", "staff_number", "faculty", "department", "qualification", "year_of_study", "address", "bio"];
@@ -254,6 +255,36 @@ export const WorkflowEditor = ({ workflowId, onClose }: Props) => {
                     {(UFH_FACULTIES[wf.faculty] ?? []).map((d) => <SelectItem key={d} value={d}>{d}</SelectItem>)}
                   </SelectContent>
                 </Select>
+              </div>
+              <div className="space-y-2 sm:col-span-2"><Label>Category</Label>
+                <Select defaultValue={wf.category ?? "default"} onValueChange={(v) => saveMeta({ category: v })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent className="bg-popover">
+                    {CATEGORIES.map((c) => <SelectItem key={c} value={c}>{CATEGORY_LABELS[c]}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">Drives the default image when no custom image is set.</p>
+              </div>
+              <div className="space-y-2 sm:col-span-2"><Label>Cover image URL (optional)</Label>
+                <div className="flex gap-2">
+                  <Input
+                    defaultValue={wf.image_url ?? ""}
+                    placeholder="https://… (leave empty to use the category default)"
+                    onBlur={(e) => saveMeta({ image_url: e.target.value.trim() || null })}
+                  />
+                  {wf.image_url && (
+                    <Button variant="outline" size="sm" onClick={() => saveMeta({ image_url: null })}>Remove</Button>
+                  )}
+                </div>
+                <div className="aspect-video w-full max-w-sm rounded-lg overflow-hidden border bg-muted">
+                  <img
+                    src={resolveOpportunityImage({ image_url: wf.image_url, category: wf.category, name: wf.name, description: wf.description })}
+                    alt="Cover preview"
+                    loading="lazy"
+                    className="w-full h-full object-cover"
+                    onError={(e) => { (e.currentTarget as HTMLImageElement).src = resolveOpportunityImage({ category: wf.category }); }}
+                  />
+                </div>
               </div>
               <div className="flex items-center justify-between sm:col-span-2 p-3 border rounded-lg">
                 <div>

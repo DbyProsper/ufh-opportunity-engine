@@ -9,6 +9,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/table";
 import { toast } from "sonner";
 import { Textarea } from "@/components/ui/textarea";
+import { inferCategory } from "@/lib/opportunityImages";
 
 interface Opp {
   title: string;
@@ -118,6 +119,17 @@ export const BulletinExtractor = ({ open, onClose, onCreated }: Props) => {
     let createdKind: "external" | "internal" = o.type;
     try {
       if (o.type === "external") {
+        // Best-effort: try to fetch an OG image from the external link.
+        let ogImage: string | null = null;
+        if (o.external_link) {
+          try {
+            const { data: ogData } = await supabase.functions.invoke("fetch-og-image", {
+              body: { url: o.external_link },
+            });
+            ogImage = (ogData as any)?.image_url ?? null;
+          } catch { /* silent — falls back to category default */ }
+        }
+        const cat = inferCategory(o.title, o.description, o.requirements);
         const { data: ins, error } = await supabase.from("external_opportunities" as any).insert({
           title: o.title,
           organization: o.organization,
@@ -127,6 +139,8 @@ export const BulletinExtractor = ({ open, onClose, onCreated }: Props) => {
           external_link: o.external_link,
           confidence: o.confidence,
           status: "draft",
+          category: cat,
+          image_url: ogImage,
         }).select().single();
         if (error) throw error;
         createdId = (ins as any)?.id ?? null;
@@ -152,8 +166,9 @@ Include the standard personal/identity/academic/address fields plus any extra st
         const wf = (data as any)?.workflow;
         if (!wf) throw new Error("Workflow not created");
         createdId = wf.id;
-        // Force draft
-        await supabase.from("workflows").update({ is_active: false }).eq("id", wf.id);
+        // Force draft and tag category
+        const cat = inferCategory(o.title, o.description, o.requirements);
+        await supabase.from("workflows").update({ is_active: false, category: cat } as any).eq("id", wf.id);
         // Add eligibility rule hints from extractor
         if (o.eligibility_hints?.length) {
           const rows = o.eligibility_hints.map((h) => ({

@@ -10,6 +10,7 @@ import { checkEligibility } from "@/lib/eligibility";
 import { explainEligibility, scoreEligibility } from "@/lib/ai";
 import type { Tables } from "@/integrations/supabase/types";
 import { supabase } from "@/integrations/supabase/client";
+import { OpportunityImage } from "@/components/OpportunityImage";
 
 interface Props {
   open: boolean;
@@ -82,6 +83,15 @@ export const OpportunityDetailsDialog = ({ open, onClose, workflow, externalOpp,
         </DialogHeader>
 
         <div className="space-y-4">
+          <OpportunityImage
+            image_url={(workflow as any)?.image_url ?? (externalOpp as any)?.image_url}
+            category={(workflow as any)?.category ?? (externalOpp as any)?.category}
+            name={title}
+            description={description}
+            aspect="video"
+            className="rounded-lg"
+            priority
+          />
           {description && <p className="text-sm whitespace-pre-wrap leading-relaxed">{description}</p>}
 
           {requirements && (
