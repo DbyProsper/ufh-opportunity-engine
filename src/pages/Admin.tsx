@@ -16,7 +16,7 @@ import { toast } from "sonner";
 import { rankApplications, RankedApplication } from "@/lib/ai";
 import { RankingExplainer } from "@/components/ai/RankingExplainer";
 import { Loader2, Plus, Sparkles, Eye, Check, X, ShieldAlert, Search, Settings2, Users, GraduationCap, Stamp, UserCheck } from "lucide-react";
-import { Trash2 } from "lucide-react";
+import { Trash2, Pencil } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { WorkflowEditor } from "@/components/admin/WorkflowEditor";
@@ -24,6 +24,7 @@ import { ApplicationDetail } from "@/components/admin/ApplicationDetail";
 import { OfferTemplateManager } from "@/components/admin/OfferTemplateManager";
 import { AIWorkflowDialog } from "@/components/admin/AIWorkflowDialog";
 import { BulletinExtractor } from "@/components/admin/BulletinExtractor";
+import { ExternalOpportunityEditor } from "@/components/admin/ExternalOpportunityEditor";
 import { BackButton } from "@/components/BackButton";
 import { History, FileSearch } from "lucide-react";
 import { UFH_FACULTIES, UFH_FACULTY_NAMES } from "@/data/ufh";
@@ -57,6 +58,8 @@ const Admin = () => {
   const [rankings, setRankings] = useState<Record<string, RankedApplication>>({});
   const [explainRank, setExplainRank] = useState<{ id: string } | null>(null);
   const [computingRank, setComputingRank] = useState(false);
+  const [confirmPublish, setConfirmPublish] = useState<{ id: string; name: string } | null>(null);
+  const [editingExtOpp, setEditingExtOpp] = useState<any>(null);
 
   // filters
   const [audienceTab, setAudienceTab] = useState<"all" | "student" | "staff">("all");
@@ -589,12 +592,17 @@ const Admin = () => {
               {workflows.map((w) => (
                 <Card
                   key={w.id}
-                  className="group cursor-pointer hover:shadow-lg hover:border-primary/40 transition"
+                  className="group cursor-pointer hover:shadow-lg hover:border-primary/40 transition overflow-hidden"
                   onClick={() => setEditingWf(w.id)}
                   role="button"
                   tabIndex={0}
                   onKeyDown={(e) => { if (e.key === "Enter") setEditingWf(w.id); }}
                 >
+                  {w.image_url && (
+                    <div className="w-full h-32 bg-muted overflow-hidden">
+                      <img src={w.image_url} alt={w.name} className="w-full h-full object-cover" />
+                    </div>
+                  )}
                   <CardContent className="p-5">
                     <div className="flex items-start justify-between mb-2 gap-2">
                       <h3 className="font-semibold">{w.name}</h3>
@@ -612,11 +620,14 @@ const Admin = () => {
                            variant={w.is_active ? "outline" : "default"}
                            className={w.is_active ? "" : "btn-gradient-primary text-primary-foreground"}
                            onClick={async () => {
-                             const next = !w.is_active;
-                             const { error } = await supabase.from("workflows").update({ is_active: next }).eq("id", w.id);
-                             if (error) return toast.error(error.message);
-                             setWorkflows((p) => p.map((x) => x.id === w.id ? { ...x, is_active: next } : x));
-                             toast.success(next ? "Published" : "Unpublished");
+                             if (!w.is_active) {
+                               setConfirmPublish({ id: w.id, name: w.name });
+                             } else {
+                               const { error } = await supabase.from("workflows").update({ is_active: false }).eq("id", w.id);
+                               if (error) return toast.error(error.message);
+                               setWorkflows((p) => p.map((x) => x.id === w.id ? { ...x, is_active: false } : x));
+                               toast.success("Unpublished");
+                             }
                            }}
                            title={w.is_active ? "Unpublish workflow" : "Publish workflow"}
                          >
@@ -653,6 +664,11 @@ const Admin = () => {
                           <Badge variant={e.status === "published" ? "default" : "outline"}>{e.status}</Badge>
                         </div>
                         {e.organization && <p className="text-xs text-muted-foreground mb-1">{e.organization}</p>}
+                        {e.image_url && (
+                          <div className="w-full h-20 bg-muted rounded mb-2 overflow-hidden">
+                            <img src={e.image_url} alt={e.title} className="w-full h-full object-cover" />
+                          </div>
+                        )}
                         <p className="text-xs text-muted-foreground line-clamp-3 mb-3">{e.description}</p>
                         {e.external_link && (
                           <a href={e.external_link} target="_blank" rel="noopener noreferrer" className="text-xs text-primary inline-flex items-center gap-1 mb-3">
@@ -673,6 +689,13 @@ const Admin = () => {
                             }}
                           >
                             {e.status === "published" ? "Unpublish" : "Publish"}
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => setEditingExtOpp(e)}
+                          >
+                            <Pencil className="w-3.5 h-3.5" /> Edit
                           </Button>
                           <Button
                             size="sm"
@@ -771,6 +794,50 @@ const Admin = () => {
             const a = applications.find((x) => x.id === explainRank?.id);
             return workflows.find((w) => w.id === a?.workflow_id)?.name ?? "";
           })()}
+        />
+
+        <AlertDialog open={!!confirmPublish} onOpenChange={(o) => !o && setConfirmPublish(null)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle className="flex items-center gap-2">
+                <ShieldAlert className="w-5 h-5 text-accent" /> Review before publishing "{confirmPublish?.name}"
+              </AlertDialogTitle>
+              <AlertDialogDescription className="space-y-3">
+                <p>Before publishing this workflow, ensure:</p>
+                <ul className="list-disc list-inside space-y-1 text-sm">
+                  <li>Eligibility rules are correctly configured</li>
+                  <li>Rules will not incorrectly exclude qualified applicants</li>
+                  <li>Applicants understand why they may be ineligible</li>
+                  <li>All required steps and fields are included</li>
+                </ul>
+                <p className="font-semibold text-amber-600">AI-generated workflows may need additional review to ensure eligibility rules match your requirements.</p>
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction onClick={async () => {
+                const wf = confirmPublish;
+                setConfirmPublish(null);
+                if (!wf) return;
+                const { error } = await supabase.from("workflows").update({ is_active: true }).eq("id", wf.id);
+                if (error) return toast.error(error.message);
+                setWorkflows((p) => p.map((x) => x.id === wf.id ? { ...x, is_active: true } : x));
+                toast.success("Published successfully");
+              }}>
+                Publish workflow
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        <ExternalOpportunityEditor
+          open={!!editingExtOpp}
+          onOpenChange={(open) => !open && setEditingExtOpp(null)}
+          opportunity={editingExtOpp}
+          onSave={(updated) => {
+            setExternalOpps((p) => p.map((x) => x.id === updated.id ? updated : x));
+            setEditingExtOpp(null);
+          }}
         />
       </main>
     </div>

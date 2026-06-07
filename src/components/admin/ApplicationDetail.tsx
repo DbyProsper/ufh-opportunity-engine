@@ -14,6 +14,7 @@ import { PreviewPackButton } from "@/pages/Apply";
 import { OfferPanel } from "@/components/OfferPanel";
 import { EventTimeline, TimelineEvent } from "@/components/EventTimeline";
 import { AffidavitPanel } from "@/components/AffidavitPanel";
+import { DocumentPreviewModal } from "@/components/admin/DocumentPreviewModal";
 
 interface Props {
   applicationId: string;
@@ -37,6 +38,9 @@ export const ApplicationDetail = ({ applicationId, onClose, onStatusChange }: Pr
   const [reasonOpen, setReasonOpen] = useState<null | "rejected" | "changes_requested">(null);
   const [reason, setReason] = useState("");
   const [events, setEvents] = useState<TimelineEvent[]>([]);
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [selectedDoc, setSelectedDoc] = useState<any>(null);
+  const [previewUrl, setPreviewUrl] = useState("");
 
   useEffect(() => {
     (async () => {
@@ -87,10 +91,24 @@ export const ApplicationDetail = ({ applicationId, onClose, onStatusChange }: Pr
     })();
   }, [applicationId]);
 
-  const viewDoc = async (path: string) => {
-    const { data, error } = await supabase.storage.from("application-documents").createSignedUrl(path, 60 * 5);
-    if (error || !data) return toast.error("Could not open file");
-    window.open(data.signedUrl, "_blank");
+  const viewDoc = async (doc: any) => {
+    const { data, error } = await supabase.storage.from("application-documents").createSignedUrl(doc.file_path, 60 * 5);
+    if (error || !data) return toast.error("Could not load file");
+    setSelectedDoc(doc);
+    setPreviewUrl(data.signedUrl);
+    setPreviewOpen(true);
+  };
+
+  const downloadDoc = async () => {
+    if (!selectedDoc) return;
+    const { data, error } = await supabase.storage.from("application-documents").createSignedUrl(selectedDoc.file_path, 60 * 5);
+    if (error || !data) return toast.error("Could not download file");
+    const link = document.createElement("a");
+    link.href = data.signedUrl;
+    link.download = selectedDoc.file_name;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
   const setStatus = async (status: string) => {
@@ -230,8 +248,8 @@ export const ApplicationDetail = ({ applicationId, onClose, onStatusChange }: Pr
                       <p className="text-xs text-muted-foreground truncate">{d.file_name}</p>
                     </div>
                   </div>
-                  <Button size="sm" variant="outline" onClick={() => viewDoc(d.file_path)}>
-                    <Eye className="w-3.5 h-3.5 mr-1" /> Open
+                  <Button size="sm" variant="outline" onClick={() => viewDoc(d)}>
+                    <Eye className="w-3.5 h-3.5 mr-1" /> Preview
                   </Button>
                 </div>
               );
@@ -307,6 +325,14 @@ export const ApplicationDetail = ({ applicationId, onClose, onStatusChange }: Pr
             </DialogFooter>
           </DialogContent>
         </Dialog>
+
+        <DocumentPreviewModal
+          open={previewOpen}
+          onOpenChange={setPreviewOpen}
+          fileUrl={previewUrl}
+          fileName={selectedDoc?.file_name || ""}
+          onDownload={downloadDoc}
+        />
       </DialogContent>
     </Dialog>
   );

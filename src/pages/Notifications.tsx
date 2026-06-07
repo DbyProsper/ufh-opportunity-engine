@@ -51,6 +51,11 @@ const Notifications = () => {
         { event: "INSERT", schema: "public", table: "notifications", filter: `user_id=eq.${user.id}` },
         (p) => { setItems((prev) => [p.new as Notif, ...prev]); play(); }
       )
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "notifications", filter: `user_id=eq.${user.id}` },
+        (p) => { setItems((prev) => prev.map((n) => (n.id === p.new.id ? (p.new as Notif) : n))); }
+      )
       .subscribe();
     return () => { supabase.removeChannel(channel); };
   }, [user, play]);

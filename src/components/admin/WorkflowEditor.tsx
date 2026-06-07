@@ -15,7 +15,8 @@ import { ArrowDown, ArrowUp, FileText, GripVertical, Layers, ListChecks, Loader2
 import { UFH_FACULTIES, UFH_FACULTY_NAMES } from "@/data/ufh";
 import { generateSuggestion, rewriteSuggestion } from "@/lib/ai";
 import { RULE_TYPES, RULE_TYPE_LABELS, YEAR_OF_STUDY_OPTIONS, QUALIFICATION_LEVELS } from "@/lib/eligibility";
-import { CATEGORIES, CATEGORY_LABELS, resolveOpportunityImage } from "@/lib/opportunityImages";
+import { CATEGORIES, CATEGORY_LABELS, resolveOpportunityImage, staticImageSuggestions } from "@/lib/opportunityImages";
+import { buildUnsplashQuery, searchUnsplashPhotos, UNSPLASH_ENABLED, UnsplashPhotoResult } from "@/lib/unsplash";
 
 const FIELD_TYPES = ["text", "textarea", "select", "multiselect", "date", "file", "number", "email", "phone"] as const;
 const PROFILE_FIELDS = ["full_name", "email", "phone", "student_number", "staff_number", "faculty", "department", "qualification", "year_of_study", "address", "bio"];
@@ -33,6 +34,10 @@ export const WorkflowEditor = ({ workflowId, onClose }: Props) => {
   const [docs, setDocs] = useState<any[]>([]);
   const [rules, setRules] = useState<any[]>([]);
   const [aiBusy, setAiBusy] = useState<string | null>(null);
+  const [unsplashResults, setUnsplashResults] = useState<UnsplashPhotoResult[]>([]);
+  const [unsplashLoading, setUnsplashLoading] = useState(false);
+  const [unsplashError, setUnsplashError] = useState<string | null>(null);
+  const [searchOverride, setSearchOverride] = useState("");
 
   const aiHelp = async (label: string, current: string, onResult: (text: string) => void, key: string) => {
     setAiBusy(key);
@@ -76,6 +81,44 @@ export const WorkflowEditor = ({ workflowId, onClose }: Props) => {
     setWf((w: any) => ({ ...w, ...patch }));
     toast.success("Saved");
   };
+
+  const buildSearchQuery = () => {
+    if (searchOverride.trim()) return searchOverride.trim();
+    return buildUnsplashQuery(wf.category, wf.name);
+  };
+
+  const loadUnsplashImages = async (query?: string) => {
+    setUnsplashError(null);
+    setUnsplashResults([]);
+
+    if (!UNSPLASH_ENABLED) {
+      setUnsplashError("Unsplash is not configured. Showing curated fallback images.");
+      return;
+    }
+
+    setUnsplashLoading(true);
+    try {
+      const searchTerm = query?.trim() || buildSearchQuery();
+      const results = await searchUnsplashPhotos(searchTerm, 6);
+      setUnsplashResults(results);
+      if (results.length === 0) {
+        setUnsplashError("No Unsplash results found for this query. Using curated fallback images.");
+      }
+    } catch (error: any) {
+      setUnsplashError(error?.message ?? "Failed to fetch Unsplash images.");
+    } finally {
+      setUnsplashLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!loading && wf) {
+      const autoQuery = buildUnsplashQuery(wf.category, wf.name);
+      if (!searchOverride.trim()) {
+        loadUnsplashImages(autoQuery);
+      }
+    }
+  }, [loading, wf?.category, wf?.name]);
 
   // ---------- STEPS ----------
   const addStep = async () => {
@@ -284,6 +327,57 @@ export const WorkflowEditor = ({ workflowId, onClose }: Props) => {
                     className="w-full h-full object-cover"
                     onError={(e) => { (e.currentTarget as HTMLImageElement).src = resolveOpportunityImage({ category: wf.category }); }}
                   />
+                </div>
+                <div className="space-y-3 pt-3">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-medium">Suggested images</p>
+                      <p className="text-xs text-muted-foreground">Uses workflow category and name automatically, or override the search below.</p>
+                    </div>
+                    <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+                      <Input
+                        value={searchOverride}
+                        onChange={(e) => setSearchOverride(e.target.value)}
+                        placeholder="Search by workflow name or custom terms"
+                        className="w-full sm:w-[260px]"
+                      />
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => loadUnsplashImages(searchOverride || undefined)}
+                        disabled={unsplashLoading}
+                      >
+                        {unsplashLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Search Unsplash"}
+                      </Button>
+                    </div>
+                  </div>
+                  {unsplashError && <p className="text-xs text-destructive">{unsplashError}</p>}
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                    {unsplashResults.map((img) => (
+                      <button
+                        key={img.id}
+                        type="button"
+                        onClick={() => saveMeta({ image_url: img.full })}
+                        className="relative overflow-hidden rounded-lg border border-border bg-muted hover:border-primary"
+                        title={img.alt}
+                      >
+                        <img src={img.thumb} alt={img.alt} className="h-24 w-full object-cover" />
+                        <span className="pointer-events-none absolute inset-x-0 bottom-0 bg-black/30 px-2 py-1 text-[10px] text-white">Unsplash</span>
+                      </button>
+                    ))}
+                    {staticImageSuggestions(wf.category).map((item) => (
+                      <button
+                        key={item.url}
+                        type="button"
+                        onClick={() => saveMeta({ image_url: item.url })}
+                        className="relative overflow-hidden rounded-lg border border-border bg-muted hover:border-primary"
+                        title={item.label}
+                      >
+                        <img src={item.url} alt={item.label} className="h-24 w-full object-cover" />
+                        <span className="pointer-events-none absolute inset-x-0 bottom-0 bg-black/30 px-2 py-1 text-[10px] text-white">Fallback</span>
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
               <div className="flex items-center justify-between sm:col-span-2 p-3 border rounded-lg">

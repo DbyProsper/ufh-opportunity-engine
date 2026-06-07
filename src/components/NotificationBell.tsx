@@ -50,6 +50,15 @@ export const NotificationBell = () => {
           play();
         }
       )
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "notifications", filter: `user_id=eq.${user.id}` },
+        (payload) => {
+          setItems((prev) =>
+            prev.map((n) => (n.id === payload.new.id ? (payload.new as Notification) : n))
+          );
+        }
+      )
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };
