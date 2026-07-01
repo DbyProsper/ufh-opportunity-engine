@@ -151,6 +151,60 @@ Deno.serve(async (req) => {
       return Response.json({ comments, source: llm ? "ai" : "rules" }, { headers: corsHeaders });
     }
 
+    if (action === "chat") {
+      const { messages, role, page, profile } = payload ?? {};
+      const system = `You are the UFH Opportunity Assistant for the University of Fort Hare (UFH) Opportunity Hub platform.
+
+Your job: help ${role === "admin" ? "an administrator" : "a student/staff user"} use this platform and find UFH resources.
+
+Be accurate, concise (2-5 sentences), professional and friendly. Never invent features that don't exist. If unsure, tell the user where they can look (dashboard, profile, admin panel, UFH website).
+
+Platform capabilities you know about:
+- Dashboard (/dashboard): browse opportunities, see your applications, unread messages.
+- Opportunities: internal workflows (apply in-platform) and external opportunities (open link on UFH/partner sites). Each has eligibility rules based on qualification, year of study, faculty, department.
+- Applications (/apply/:slug): fill fields with AI assistant, upload documents, submit. Users can withdraw only while status is 'submitted'.
+- Profile (/profile): personal info, qualification, year of study, banking, next of kin.
+- Messages (/messages): conversations with reviewers.
+- Settings (/settings): theme.
+- Admin (/admin): manage workflows, review applications, extract opportunities from Daily Bulletin PDFs, manage admins, audit logs.
+
+Useful UFH links you can share when relevant:
+- UFH main site: https://www.ufh.ac.za
+- UFH Student Portal (ITS/iEnabler): https://ienabler.ufh.ac.za/pls/prodi41/w99pkg.mi_login
+- UFH Blackboard: https://ufh.blackboard.com
+- UFH Library: https://libguides.ufh.ac.za
+- UFH Financial Aid: https://www.ufh.ac.za/students/financial-aid
+- UFH Contact: +27 40 602 2011
+
+Current user context: role=${role ?? "student"}, page=${page ?? "unknown"}${profile?.faculty ? `, faculty=${profile.faculty}` : ""}${profile?.department ? `, dept=${profile.department}` : ""}.
+
+When suggesting an action the user can take in this app, end your message with a JSON line on its own last line like:
+ACTIONS: [{"label":"View Opportunities","route":"/dashboard"},{"label":"Open UFH ITS","url":"https://ienabler.ufh.ac.za/pls/prodi41/w99pkg.mi_login"}]
+Only include ACTIONS when helpful. Max 3 actions. No markdown formatting anywhere else.`;
+      const convo = Array.isArray(messages) ? messages.slice(-12) : [];
+      const key = Deno.env.get("LOVABLE_API_KEY");
+      let text: string | null = null;
+      if (key) {
+        try {
+          const res = await fetch(GATEWAY_URL, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "Lovable-API-Key": key, "Authorization": `Bearer ${key}` },
+            body: JSON.stringify({
+              model: MODEL,
+              messages: [{ role: "system", content: system }, ...convo],
+            }),
+          });
+          if (res.ok) {
+            const data = await res.json();
+            text = data?.choices?.[0]?.message?.content?.trim() ?? null;
+          } else {
+            console.error("chat gateway error", res.status, await res.text());
+          }
+        } catch (e) { console.error("chat exception", e); }
+      }
+      return Response.json({ text, source: text ? "ai" : null }, { headers: corsHeaders });
+    }
+
     return Response.json({ error: "Unknown action" }, { status: 400, headers: corsHeaders });
   } catch (e: any) {
     console.error("ai-assist error", e);
