@@ -14,6 +14,33 @@ const corsHeaders = {
 const GATEWAY_URL = "https://ai.gateway.lovable.dev/v1/chat/completions";
 const MODEL = "google/gemini-2.5-flash";
 
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+
+function admin() {
+  return createClient(
+    Deno.env.get("SUPABASE_URL")!,
+    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+    { auth: { persistSession: false } },
+  );
+}
+
+async function logChat(entry: {
+  user_id?: string | null;
+  event_type: string;
+  source?: string | null;
+  model?: string | null;
+  duration_ms?: number | null;
+  success?: boolean | null;
+  error_message?: string | null;
+  metadata?: Record<string, unknown> | null;
+}) {
+  try {
+    await admin().from("chat_logs").insert(entry);
+  } catch (e) {
+    console.error("chat log insert failed", e);
+  }
+}
+
 async function callLLM(system: string, user: string): Promise<string | null> {
   const key = Deno.env.get("LOVABLE_API_KEY");
   if (!key) return null;
