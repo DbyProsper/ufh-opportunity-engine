@@ -179,7 +179,10 @@ Deno.serve(async (req) => {
     }
 
     if (action === "chat") {
-      const { messages, role, page, profile } = payload ?? {};
+      const { messages, role, page, profile, userId, context } = payload ?? {};
+      const contextBlock = context
+        ? `\n\nCURRENT CONTEXT (use this to give accurate, specific answers about what the user is looking at):\n${JSON.stringify(context).slice(0, 2000)}`
+        : "";
       const system = `You are the UFH Opportunity Assistant for the University of Fort Hare (UFH) Opportunity Hub platform.
 
 Your job: help ${role === "admin" ? "an administrator" : "a student/staff user"} use this platform and find UFH resources.
@@ -203,7 +206,7 @@ Useful UFH links you can share when relevant:
 - UFH Financial Aid: https://www.ufh.ac.za/students/financial-aid
 - UFH Contact: +27 40 602 2011
 
-Current user context: role=${role ?? "student"}, page=${page ?? "unknown"}${profile?.faculty ? `, faculty=${profile.faculty}` : ""}${profile?.department ? `, dept=${profile.department}` : ""}.
+Current user context: role=${role ?? "student"}, page=${page ?? "unknown"}${profile?.faculty ? `, faculty=${profile.faculty}` : ""}${profile?.department ? `, dept=${profile.department}` : ""}.${contextBlock}
 
 When suggesting an action the user can take in this app, end your message with a JSON line on its own last line like:
 ACTIONS: [{"label":"View Opportunities","route":"/dashboard"},{"label":"Open UFH ITS","url":"https://ienabler.ufh.ac.za/pls/prodi41/w99pkg.mi_login"}]
@@ -211,8 +214,11 @@ Only include ACTIONS when helpful. Max 3 actions. No markdown formatting anywher
       const convo = Array.isArray(messages) ? messages.slice(-12) : [];
       const key = Deno.env.get("LOVABLE_API_KEY");
       let text: string | null = null;
+      const started = Date.now();
       if (key) {
         try {
+          const controller = new AbortController();
+          const timeout = setTimeout(() => controller.abort(), 25000);
           const res = await fetch(GATEWAY_URL, {
             method: "POST",
             headers: { "Content-Type": "application/json", "Lovable-API-Key": key, "Authorization": `Bearer ${key}` },
@@ -220,14 +226,24 @@ Only include ACTIONS when helpful. Max 3 actions. No markdown formatting anywher
               model: MODEL,
               messages: [{ role: "system", content: system }, ...convo],
             }),
+            signal: controller.signal,
           });
+          clearTimeout(timeout);
           if (res.ok) {
             const data = await res.json();
             text = data?.choices?.[0]?.message?.content?.trim() ?? null;
+            await logChat({ user_id: userId ?? null, event_type: "chat", source: "ai", model: MODEL, duration_ms: Date.now() - started, success: !!text, metadata: { page, hasContext: !!context } });
           } else {
-            console.error("chat gateway error", res.status, await res.text());
+            const errBody = await res.text();
+            console.error("chat gateway error", res.status, errBody);
+            await logChat({ user_id: userId ?? null, event_type: "chat", source: "ai", model: MODEL, duration_ms: Date.now() - started, success: false, error_message: `gateway ${res.status}: ${errBody.slice(0,500)}`, metadata: { page } });
           }
-        } catch (e) { console.error("chat exception", e); }
+        } catch (e: any) {
+          console.error("chat exception", e);
+          await logChat({ user_id: userId ?? null, event_type: "chat", source: "ai", model: MODEL, duration_ms: Date.now() - started, success: false, error_message: e?.name === "AbortError" ? "timeout" : (e?.message ?? String(e)), metadata: { page } });
+        }
+      } else {
+        await logChat({ user_id: userId ?? null, event_type: "chat", source: "ai", success: false, error_message: "missing LOVABLE_API_KEY", metadata: { page } });
       }
       return Response.json({ text, source: text ? "ai" : null }, { headers: corsHeaders });
     }
