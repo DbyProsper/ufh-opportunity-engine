@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from "react";
-import { MessageCircle, X, Sparkles, Send, Loader2, ExternalLink, ArrowRight } from "lucide-react";
+import { useEffect, useRef, useState, useCallback } from "react";
+import { MessageCircle, X, Sparkles, Send, Loader2, ExternalLink, ArrowRight, Trash2 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,57 +8,40 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 
 type ChatAction = { label: string; route?: string; url?: string };
-type ChatMsg = { role: "user" | "assistant"; content: string; actions?: ChatAction[] };
+type ChatMsg = { id?: string; role: "user" | "assistant"; content: string; actions?: ChatAction[] };
 
-const UFH_LINKS: Record<string, { label: string; url: string }> = {
-  its: { label: "UFH ITS / iEnabler", url: "https://ienabler.ufh.ac.za/pls/prodi41/w99pkg.mi_login" },
-  ienabler: { label: "UFH ITS / iEnabler", url: "https://ienabler.ufh.ac.za/pls/prodi41/w99pkg.mi_login" },
-  blackboard: { label: "UFH Blackboard", url: "https://ufh.blackboard.com" },
-  library: { label: "UFH Library", url: "https://libguides.ufh.ac.za" },
-  financial: { label: "UFH Financial Aid", url: "https://www.ufh.ac.za/students/financial-aid" },
-  website: { label: "UFH Website", url: "https://www.ufh.ac.za" },
-  ufh: { label: "UFH Website", url: "https://www.ufh.ac.za" },
+type Intent = {
+  id: string;
+  name: string;
+  keywords: string[];
+  response: string;
+  actions: ChatAction[] | null;
+  audience: "all" | "student" | "admin";
+  priority: number;
 };
 
-function ruleBasedReply(input: string, isAdmin: boolean): ChatMsg {
+const FALLBACK_DEFAULT: ChatMsg = {
+  role: "assistant",
+  content:
+    "I can help you find opportunities, check eligibility, understand documents, navigate the platform, or open UFH services like ITS, Blackboard and the library. What would you like to do?",
+  actions: [
+    { label: "View Opportunities", route: "/dashboard" },
+    { label: "UFH Website", url: "https://www.ufh.ac.za" },
+  ],
+};
+
+function matchIntent(input: string, intents: Intent[], audience: "admin" | "student" | "guest"): ChatMsg | null {
   const q = input.toLowerCase();
-  const hit = Object.keys(UFH_LINKS).find((k) => q.includes(k));
-  if (hit) {
-    const link = UFH_LINKS[hit];
-    return { role: "assistant", content: `Here is the ${link.label}. Click below to open it in a new tab.`, actions: [{ label: `Open ${link.label}`, url: link.url }] };
+  const eligible = intents.filter(
+    (i) => i.audience === "all" || (i.audience === "admin" && audience === "admin") || (i.audience === "student" && audience !== "guest"),
+  );
+  const sorted = [...eligible].sort((a, b) => b.priority - a.priority);
+  for (const intent of sorted) {
+    if (intent.keywords.some((k) => k && q.includes(k.toLowerCase()))) {
+      return { role: "assistant", content: intent.response, actions: intent.actions ?? undefined };
+    }
   }
-  if (/eligib|qualify|can i apply/.test(q)) {
-    return { role: "assistant", content: "Eligibility depends on your qualification, year of study, faculty and department. Open an opportunity and tap 'Why?' to see the exact check for it.", actions: [{ label: "Browse Opportunities", route: "/dashboard" }, { label: "Update Profile", route: "/profile" }] };
-  }
-  if (/document|upload|require|what do i need/.test(q)) {
-    return { role: "assistant", content: "Most applications need: certified ID, latest academic transcript, CV, and any opportunity-specific documents listed on the application page.", actions: [{ label: "My Applications", route: "/dashboard" }] };
-  }
-  if (/opportun|bursary|intern|tutor|apply|browse/.test(q)) {
-    return { role: "assistant", content: "You can browse all published opportunities on your dashboard. Filter by category or use the search bar.", actions: [{ label: "View Opportunities", route: "/dashboard" }] };
-  }
-  if (/deadline|due|when/.test(q)) {
-    return { role: "assistant", content: "Each opportunity shows its closing date on the card. Open the details dialog for the exact deadline.", actions: [{ label: "View Opportunities", route: "/dashboard" }] };
-  }
-  if (/message|reviewer|chat/.test(q)) {
-    return { role: "assistant", content: "All conversations with reviewers appear in your Messages inbox.", actions: [{ label: "Open Messages", route: "/messages" }] };
-  }
-  if (isAdmin && /(workflow|admin|extract|bulletin|invite)/.test(q)) {
-    return { role: "assistant", content: "In the Admin dashboard you can create workflows, extract opportunities from the Daily Bulletin PDF, review applications, and manage admins.", actions: [{ label: "Admin Dashboard", route: "/admin" }, { label: "Audit Log", route: "/admin/audit" }] };
-  }
-  if (/profile|banking|next of kin/.test(q)) {
-    return { role: "assistant", content: "Update your personal details, qualification and banking info on the Profile page. A complete profile speeds up applications.", actions: [{ label: "Open Profile", route: "/profile" }] };
-  }
-  if (/theme|dark|light|setting/.test(q)) {
-    return { role: "assistant", content: "Change your theme (light, dark, UFH, minimal, image) from Settings.", actions: [{ label: "Open Settings", route: "/settings" }] };
-  }
-  return {
-    role: "assistant",
-    content: "I can help you find opportunities, check eligibility, understand documents, navigate the platform, or open UFH services like ITS, Blackboard and the library. What would you like to do?",
-    actions: [
-      { label: "View Opportunities", route: "/dashboard" },
-      { label: "UFH Website", url: "https://www.ufh.ac.za" },
-    ],
-  };
+  return null;
 }
 
 function parseActions(text: string): { content: string; actions?: ChatAction[] } {
@@ -70,51 +53,151 @@ function parseActions(text: string): { content: string; actions?: ChatAction[] }
   } catch { return { content: text }; }
 }
 
+const WELCOME: ChatMsg = {
+  role: "assistant",
+  content: "Hi! I'm the UFH Opportunity Assistant. Ask about opportunities, eligibility, documents, or UFH services like ITS and Blackboard.",
+};
+
 export const ChatBubble = () => {
   const [open, setOpen] = useState(false);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
-  const [messages, setMessages] = useState<ChatMsg[]>([
-    { role: "assistant", content: "Hi! I'm the UFH Opportunity Assistant. Ask about opportunities, eligibility, documents, or UFH services like ITS and Blackboard." },
-  ]);
+  const [messages, setMessages] = useState<ChatMsg[]>([WELCOME]);
+  const [intents, setIntents] = useState<Intent[]>([]);
   const { user, isAdmin } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
   const scrollRef = useRef<HTMLDivElement>(null);
 
+  const audience: "admin" | "student" | "guest" = isAdmin ? "admin" : user ? "student" : "guest";
+
+  // Load intents once
+  useEffect(() => {
+    supabase
+      .from("chat_intents")
+      .select("id,name,keywords,response,actions,audience,priority")
+      .eq("enabled", true)
+      .then(({ data }) => setIntents((data as any) ?? []));
+  }, []);
+
+  // Load persisted history for the signed-in user
+  useEffect(() => {
+    if (!user) {
+      setMessages([WELCOME]);
+      return;
+    }
+    supabase
+      .from("chat_messages")
+      .select("id,role,content,actions")
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: true })
+      .limit(200)
+      .then(({ data }) => {
+        if (data && data.length > 0) {
+          setMessages(
+            data.map((r: any) => ({ id: r.id, role: r.role, content: r.content, actions: r.actions ?? undefined })),
+          );
+        } else {
+          setMessages([WELCOME]);
+        }
+      });
+  }, [user?.id]);
+
   useEffect(() => {
     if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
   }, [messages, loading, open]);
 
+  const persist = useCallback(
+    async (msg: ChatMsg) => {
+      if (!user) return;
+      await supabase.from("chat_messages").insert({
+        user_id: user.id,
+        role: msg.role,
+        content: msg.content,
+        actions: msg.actions ?? null,
+      });
+    },
+    [user],
+  );
+
+  const buildContext = useCallback(async () => {
+    try {
+      const path = location.pathname;
+      // /apply/:slug → include workflow + user's application
+      const applyMatch = path.match(/^\/apply\/([^/]+)/);
+      if (applyMatch) {
+        const slug = applyMatch[1];
+        const { data: wf } = await supabase
+          .from("workflows")
+          .select("id,name,slug,description,category,faculty,department,deadline,is_postgraduate_only")
+          .eq("slug", slug)
+          .maybeSingle();
+        let application: any = null;
+        if (wf && user) {
+          const { data: app } = await supabase
+            .from("applications")
+            .select("id,status,submitted_at,rejection_reason,is_editable")
+            .eq("workflow_id", (wf as any).id)
+            .eq("user_id", user.id)
+            .maybeSingle();
+          application = app;
+        }
+        return { page: "apply", workflow: wf, application };
+      }
+      return { page: path };
+    } catch {
+      return { page: location.pathname };
+    }
+  }, [location.pathname, user?.id]);
+
+  const clearHistory = async () => {
+    if (!user) {
+      setMessages([WELCOME]);
+      return;
+    }
+    await supabase.from("chat_messages").delete().eq("user_id", user.id);
+    setMessages([WELCOME]);
+  };
+
   const send = async () => {
     const text = input.trim();
     if (!text || loading) return;
-    const next: ChatMsg[] = [...messages, { role: "user", content: text }];
+    const userMsg: ChatMsg = { role: "user", content: text };
+    const next: ChatMsg[] = [...messages, userMsg];
     setMessages(next);
     setInput("");
     setLoading(true);
+    void persist(userMsg);
+    const context = await buildContext();
     try {
       const { data, error } = await supabase.functions.invoke("ai-assist", {
         body: {
           action: "chat",
           payload: {
             messages: next.map((m) => ({ role: m.role, content: m.content })),
-            role: isAdmin ? "admin" : user ? "student" : "guest",
+            role: audience,
             page: location.pathname,
+            userId: user?.id ?? null,
+            context,
           },
         },
       });
       if (error) throw error;
       const raw = (data as any)?.text as string | null;
+      let reply: ChatMsg;
       if (raw) {
         const parsed = parseActions(raw);
-        setMessages((m) => [...m, { role: "assistant", content: parsed.content, actions: parsed.actions }]);
+        reply = { role: "assistant", content: parsed.content, actions: parsed.actions };
       } else {
-        setMessages((m) => [...m, ruleBasedReply(text, isAdmin)]);
+        reply = matchIntent(text, intents, audience) ?? FALLBACK_DEFAULT;
       }
+      setMessages((m) => [...m, reply]);
+      void persist(reply);
     } catch (e) {
       console.error("chat error", e);
-      setMessages((m) => [...m, ruleBasedReply(text, isAdmin)]);
+      const reply = matchIntent(text, intents, audience) ?? FALLBACK_DEFAULT;
+      setMessages((m) => [...m, reply]);
+      void persist(reply);
     } finally {
       setLoading(false);
     }
@@ -149,9 +232,16 @@ export const ChatBubble = () => {
             <p className="text-[10px] text-muted-foreground">{isAdmin ? "Admin mode" : "Student mode"}</p>
           </div>
         </div>
-        <button onClick={() => setOpen(false)} aria-label="Close">
-          <X className="w-4 h-4 text-muted-foreground hover:text-foreground" />
-        </button>
+        <div className="flex items-center gap-2">
+          {user && messages.length > 1 && (
+            <button onClick={clearHistory} aria-label="Clear history" title="Clear chat history">
+              <Trash2 className="w-3.5 h-3.5 text-muted-foreground hover:text-destructive" />
+            </button>
+          )}
+          <button onClick={() => setOpen(false)} aria-label="Close">
+            <X className="w-4 h-4 text-muted-foreground hover:text-foreground" />
+          </button>
+        </div>
       </div>
 
       <div ref={scrollRef} className="flex-1 overflow-y-auto p-3 space-y-3">
