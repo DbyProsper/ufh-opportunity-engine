@@ -29,6 +29,7 @@ import { BackButton } from "@/components/BackButton";
 import { History, FileSearch } from "lucide-react";
 import { UFH_FACULTIES, UFH_FACULTY_NAMES } from "@/data/ufh";
 import { AdminManagement } from "@/components/admin/AdminManagement";
+import { ChatIntentManager } from "@/components/admin/ChatIntentManager";
 import { Switch } from "@/components/ui/switch";
 import { ExternalLink } from "lucide-react";
 
@@ -324,6 +325,7 @@ const Admin = () => {
             <TabsTrigger value="applications">Applications ({applications.length})</TabsTrigger>
             <TabsTrigger value="workflows">Workflows ({workflows.length})</TabsTrigger>
             <TabsTrigger value="access">Access</TabsTrigger>
+            <TabsTrigger value="assistant">Assistant</TabsTrigger>
           </TabsList>
 
           <TabsContent value="applications">
@@ -722,6 +724,10 @@ const Admin = () => {
 
           <TabsContent value="access">
             <AdminManagement />
+          </TabsContent>
+
+          <TabsContent value="assistant">
+            <ChatIntentManager />
           </TabsContent>
         </Tabs>
 
