@@ -486,6 +486,114 @@ export type Database = {
         }
         Relationships: []
       }
+      chat_intents: {
+        Row: {
+          actions: Json | null
+          audience: string
+          created_at: string
+          enabled: boolean
+          id: string
+          keywords: string[]
+          name: string
+          priority: number
+          response: string
+          updated_at: string
+        }
+        Insert: {
+          actions?: Json | null
+          audience?: string
+          created_at?: string
+          enabled?: boolean
+          id?: string
+          keywords?: string[]
+          name: string
+          priority?: number
+          response: string
+          updated_at?: string
+        }
+        Update: {
+          actions?: Json | null
+          audience?: string
+          created_at?: string
+          enabled?: boolean
+          id?: string
+          keywords?: string[]
+          name?: string
+          priority?: number
+          response?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      chat_logs: {
+        Row: {
+          created_at: string
+          duration_ms: number | null
+          error_message: string | null
+          event_type: string
+          id: string
+          metadata: Json | null
+          model: string | null
+          source: string | null
+          success: boolean | null
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          duration_ms?: number | null
+          error_message?: string | null
+          event_type: string
+          id?: string
+          metadata?: Json | null
+          model?: string | null
+          source?: string | null
+          success?: boolean | null
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          duration_ms?: number | null
+          error_message?: string | null
+          event_type?: string
+          id?: string
+          metadata?: Json | null
+          model?: string | null
+          source?: string | null
+          success?: boolean | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
+      chat_messages: {
+        Row: {
+          actions: Json | null
+          content: string
+          context: Json | null
+          created_at: string
+          id: string
+          role: string
+          user_id: string
+        }
+        Insert: {
+          actions?: Json | null
+          content: string
+          context?: Json | null
+          created_at?: string
+          id?: string
+          role: string
+          user_id: string
+        }
+        Update: {
+          actions?: Json | null
+          content?: string
+          context?: Json | null
+          created_at?: string
+          id?: string
+          role?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       eligibility_rules: {
         Row: {
           created_at: string
