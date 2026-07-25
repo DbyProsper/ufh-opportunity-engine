@@ -14,6 +14,33 @@ const corsHeaders = {
 const GATEWAY_URL = "https://ai.gateway.lovable.dev/v1/chat/completions";
 const MODEL = "google/gemini-2.5-flash";
 
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+
+function admin() {
+  return createClient(
+    Deno.env.get("SUPABASE_URL")!,
+    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+    { auth: { persistSession: false } },
+  );
+}
+
+async function logChat(entry: {
+  user_id?: string | null;
+  event_type: string;
+  source?: string | null;
+  model?: string | null;
+  duration_ms?: number | null;
+  success?: boolean | null;
+  error_message?: string | null;
+  metadata?: Record<string, unknown> | null;
+}) {
+  try {
+    await admin().from("chat_logs").insert(entry);
+  } catch (e) {
+    console.error("chat log insert failed", e);
+  }
+}
+
 async function callLLM(system: string, user: string): Promise<string | null> {
   const key = Deno.env.get("LOVABLE_API_KEY");
   if (!key) return null;
@@ -149,6 +176,76 @@ Deno.serve(async (req) => {
         } catch { /* ignore */ }
       }
       return Response.json({ comments, source: llm ? "ai" : "rules" }, { headers: corsHeaders });
+    }
+
+    if (action === "chat") {
+      const { messages, role, page, profile, userId, context } = payload ?? {};
+      const contextBlock = context
+        ? `\n\nCURRENT CONTEXT (use this to give accurate, specific answers about what the user is looking at):\n${JSON.stringify(context).slice(0, 2000)}`
+        : "";
+      const system = `You are the UFH Opportunity Assistant for the University of Fort Hare (UFH) Opportunity Hub platform.
+
+Your job: help ${role === "admin" ? "an administrator" : "a student/staff user"} use this platform and find UFH resources.
+
+Be accurate, concise (2-5 sentences), professional and friendly. Never invent features that don't exist. If unsure, tell the user where they can look (dashboard, profile, admin panel, UFH website).
+
+Platform capabilities you know about:
+- Dashboard (/dashboard): browse opportunities, see your applications, unread messages.
+- Opportunities: internal workflows (apply in-platform) and external opportunities (open link on UFH/partner sites). Each has eligibility rules based on qualification, year of study, faculty, department.
+- Applications (/apply/:slug): fill fields with AI assistant, upload documents, submit. Users can withdraw only while status is 'submitted'.
+- Profile (/profile): personal info, qualification, year of study, banking, next of kin.
+- Messages (/messages): conversations with reviewers.
+- Settings (/settings): theme.
+- Admin (/admin): manage workflows, review applications, extract opportunities from Daily Bulletin PDFs, manage admins, audit logs.
+
+Useful UFH links you can share when relevant:
+- UFH main site: https://www.ufh.ac.za
+- UFH Student Portal (ITS/iEnabler): https://ienabler.ufh.ac.za/pls/prodi41/w99pkg.mi_login
+- UFH Blackboard: https://ufh.blackboard.com
+- UFH Library: https://libguides.ufh.ac.za
+- UFH Financial Aid: https://www.ufh.ac.za/students/financial-aid
+- UFH Contact: +27 40 602 2011
+
+Current user context: role=${role ?? "student"}, page=${page ?? "unknown"}${profile?.faculty ? `, faculty=${profile.faculty}` : ""}${profile?.department ? `, dept=${profile.department}` : ""}.${contextBlock}
+
+When suggesting an action the user can take in this app, end your message with a JSON line on its own last line like:
+ACTIONS: [{"label":"View Opportunities","route":"/dashboard"},{"label":"Open UFH ITS","url":"https://ienabler.ufh.ac.za/pls/prodi41/w99pkg.mi_login"}]
+Only include ACTIONS when helpful. Max 3 actions. No markdown formatting anywhere else.`;
+      const convo = Array.isArray(messages) ? messages.slice(-12) : [];
+      const key = Deno.env.get("LOVABLE_API_KEY");
+      let text: string | null = null;
+      const started = Date.now();
+      if (key) {
+        try {
+          const controller = new AbortController();
+          const timeout = setTimeout(() => controller.abort(), 25000);
+          const res = await fetch(GATEWAY_URL, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "Lovable-API-Key": key, "Authorization": `Bearer ${key}` },
+            body: JSON.stringify({
+              model: MODEL,
+              messages: [{ role: "system", content: system }, ...convo],
+            }),
+            signal: controller.signal,
+          });
+          clearTimeout(timeout);
+          if (res.ok) {
+            const data = await res.json();
+            text = data?.choices?.[0]?.message?.content?.trim() ?? null;
+            await logChat({ user_id: userId ?? null, event_type: "chat", source: "ai", model: MODEL, duration_ms: Date.now() - started, success: !!text, metadata: { page, hasContext: !!context } });
+          } else {
+            const errBody = await res.text();
+            console.error("chat gateway error", res.status, errBody);
+            await logChat({ user_id: userId ?? null, event_type: "chat", source: "ai", model: MODEL, duration_ms: Date.now() - started, success: false, error_message: `gateway ${res.status}: ${errBody.slice(0,500)}`, metadata: { page } });
+          }
+        } catch (e: any) {
+          console.error("chat exception", e);
+          await logChat({ user_id: userId ?? null, event_type: "chat", source: "ai", model: MODEL, duration_ms: Date.now() - started, success: false, error_message: e?.name === "AbortError" ? "timeout" : (e?.message ?? String(e)), metadata: { page } });
+        }
+      } else {
+        await logChat({ user_id: userId ?? null, event_type: "chat", source: "ai", success: false, error_message: "missing LOVABLE_API_KEY", metadata: { page } });
+      }
+      return Response.json({ text, source: text ? "ai" : null }, { headers: corsHeaders });
     }
 
     return Response.json({ error: "Unknown action" }, { status: 400, headers: corsHeaders });
