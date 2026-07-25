@@ -48,7 +48,8 @@ export const AIWorkflowDialog = ({ open, onClose, onCreated }: Props) => {
       setPrompt(""); setFaculty(""); setDeadline("");
       onClose();
     } catch (e: any) {
-      toast.error(e?.message ?? "Generation failed");
+      console.error("workflow generation error", e);
+      toast.error(e?.message ?? "Generation failed. The edge function may not be deployed for this Supabase project.");
     } finally { setBusy(false); }
   };
 

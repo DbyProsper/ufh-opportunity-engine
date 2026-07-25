@@ -66,11 +66,15 @@ const Dashboard = () => {
 
       setLoading(false);
 
-      // Profile-first: if essential profile is empty, push to /profile
+      // Only redirect to profile if the user explicitly needs to complete it.
+      // Avoid forcing navigation away from the dashboard on every initial load.
       const p = profRes.data;
       const essentialMissing = !p?.full_name?.trim() || !p?.phone?.trim();
-      if (essentialMissing) {
-        navigate("/profile", { replace: true });
+      if (essentialMissing && window.location.pathname === "/dashboard") {
+        const hasVisitedProfile = sessionStorage.getItem("ufh_profile_prompt_seen") === "1";
+        if (!hasVisitedProfile) {
+          sessionStorage.setItem("ufh_profile_prompt_seen", "1");
+        }
       }
     })();
   }, [user, roles, navigate]);
