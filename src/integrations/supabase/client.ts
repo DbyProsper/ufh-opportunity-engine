@@ -2,10 +2,19 @@
 import { createClient } from '@supabase/supabase-js';
 import type { Database } from './types';
 
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
-const SUPABASE_PUBLISHABLE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+const LEGACY_SUPABASE_URL = 'https://xgkcanrvczvegtpjgibz.supabase.co';
+const DEFAULT_SUPABASE_URL = 'https://seqhotvitxuiaexrrbmr.supabase.co';
+const LEGACY_SUPABASE_PUBLISHABLE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inhna2NhbnJ2Y3p2ZWd0cGpnaWJ6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzcxMzU1ODEsImV4cCI6MjA5MjcxMTU4MX0.Vbvya1qbtFIETajeDnS9_NaTsfrsDNb2hu_kVv1nDro';
+const DEFAULT_SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_JV24T1a9RBpTCp1tZTMGkw_cRPPNah7';
 
-// Validate environment variables
+const envUrl = import.meta.env.VITE_SUPABASE_URL?.trim();
+const envPublishableKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY?.trim();
+
+const SUPABASE_URL = envUrl && envUrl !== LEGACY_SUPABASE_URL ? envUrl : DEFAULT_SUPABASE_URL;
+const SUPABASE_PUBLISHABLE_KEY = envPublishableKey && envPublishableKey !== LEGACY_SUPABASE_PUBLISHABLE_KEY
+  ? envPublishableKey
+  : DEFAULT_SUPABASE_PUBLISHABLE_KEY;
+
 if (!SUPABASE_URL || !SUPABASE_PUBLISHABLE_KEY) {
   throw new Error(
     `Missing required Supabase environment variables:\n` +
