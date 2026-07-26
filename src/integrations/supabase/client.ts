@@ -10,10 +10,10 @@ const DEFAULT_SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_JV24T1a9RBpTCp1tZTMGkw_
 const envUrl = import.meta.env.VITE_SUPABASE_URL?.trim();
 const envPublishableKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY?.trim();
 
-const SUPABASE_URL = envUrl && envUrl !== LEGACY_SUPABASE_URL ? envUrl : DEFAULT_SUPABASE_URL;
-const SUPABASE_PUBLISHABLE_KEY = envPublishableKey && envPublishableKey !== LEGACY_SUPABASE_PUBLISHABLE_KEY
-  ? envPublishableKey
-  : DEFAULT_SUPABASE_PUBLISHABLE_KEY;
+// If you want to use the old Lovable-managed DB again, set the following env vars
+// to the old project's URL and publishable key.
+const SUPABASE_URL = envUrl || DEFAULT_SUPABASE_URL;
+const SUPABASE_PUBLISHABLE_KEY = envPublishableKey || DEFAULT_SUPABASE_PUBLISHABLE_KEY;
 
 if (!SUPABASE_URL || !SUPABASE_PUBLISHABLE_KEY) {
   throw new Error(

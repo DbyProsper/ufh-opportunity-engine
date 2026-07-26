@@ -16,10 +16,14 @@ const MODEL = "google/gemini-2.5-flash";
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 
+const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? Deno.env.get("VITE_SUPABASE_URL");
+const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? Deno.env.get("SUPABASE_SECRET_KEY");
+
 function admin() {
+  if (!SUPABASE_URL || !SERVICE_KEY) return null;
   return createClient(
-    Deno.env.get("SUPABASE_URL")!,
-    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+    SUPABASE_URL,
+    SERVICE_KEY,
     { auth: { persistSession: false } },
   );
 }
