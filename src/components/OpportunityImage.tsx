@@ -10,6 +10,7 @@ interface Props {
   aspect?: "video" | "square" | "wide";
   alt?: string;
   priority?: boolean;
+  fit?: "cover" | "contain";
 }
 
 const aspectClass = {
@@ -20,7 +21,7 @@ const aspectClass = {
 
 export const OpportunityImage = ({
   image_url, category, name, description,
-  className = "", aspect = "video", alt, priority = false,
+  className = "", aspect = "video", alt, priority = false, fit = "cover",
 }: Props) => {
   const initial = resolveOpportunityImage({ image_url, category, name, description });
   const [src, setSrc] = useState(initial);
@@ -41,7 +42,7 @@ export const OpportunityImage = ({
         loading={priority ? "eager" : "lazy"}
         decoding="async"
         onError={handleError}
-        className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 hover:scale-105"
+        className={`absolute inset-0 h-full w-full ${fit === "contain" ? "object-contain" : "object-cover"} transition-transform duration-500 hover:scale-105`}
       />
       <div className="absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-t from-black/40 to-transparent pointer-events-none" />
     </div>

@@ -25,6 +25,7 @@ import { AIAssistantPanel } from "@/components/ai/AIAssistantPanel";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { checkEligibility } from "@/lib/eligibility";
 import { ApprovalCelebration } from "@/components/ApprovalCelebration";
+import { OpportunityImage } from "@/components/OpportunityImage";
 
 const Apply = () => {
   const { slug } = useParams();
@@ -366,9 +367,24 @@ const Apply = () => {
       <AppHeader />
       <main className="container mx-auto px-4 py-6 md:py-8 flex-1 max-w-4xl w-full">
         <BackButton to="/dashboard" label="Back to dashboard" />
-        <div className="mb-6">
-          <h1 className="text-2xl md:text-3xl font-bold">{workflow.name}</h1>
-          <p className="text-muted-foreground">{workflow.description}</p>
+        <div className="mb-6 space-y-4">
+          <div className="overflow-hidden rounded-2xl border bg-muted/20 shadow-sm">
+            <OpportunityImage
+              image_url={workflow?.image_url}
+              category={workflow?.category}
+              name={workflow?.name}
+              description={workflow?.description}
+              aspect="wide"
+              className="h-48 md:h-64 w-full bg-background/60"
+              alt={`${workflow?.name} cover`}
+              priority
+              fit="cover"
+            />
+          </div>
+          <div>
+            <h1 className="text-2xl md:text-3xl font-bold">{workflow.name}</h1>
+            <p className="text-muted-foreground">{workflow.description}</p>
+          </div>
         </div>
 
         {submitted && (
