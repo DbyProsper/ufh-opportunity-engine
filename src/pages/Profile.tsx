@@ -1,12 +1,10 @@
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { AppHeader } from "@/components/AppHeader";
 import { BackButton } from "@/components/BackButton";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
-import { PasswordInput } from "@/components/ui/password-input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
@@ -81,9 +79,6 @@ const ProfilePage = () => {
   const [cvParsing, setCvParsing] = useState(false);
   const [profileDocs, setProfileDocs] = useState<any[]>([]);
   const [syncing, setSyncing] = useState(false);
-  const [passwordChangeLoading, setPasswordChangeLoading] = useState(false);
-  const [newPassword, setNewPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
   const [profileExtra, setProfileExtra] = useState<Record<string, { label: string; value: string; updated_at?: string }>>({});
   // Profile-level UI flags persisted into profile_extra.__flags
   const [flags, setFlags] = useState<{ postal_same: boolean; nok_same: boolean; has_staff: boolean }>({
@@ -432,34 +427,6 @@ const ProfilePage = () => {
     toast.success("Removed from profile library.");
   };
 
-  const handlePasswordChange = async (e: FormEvent) => {
-    e.preventDefault();
-    if (!user) return;
-
-    if (newPassword.length < 8) {
-      toast.error("Password must be at least 8 characters long.");
-      return;
-    }
-
-    if (newPassword !== confirmPassword) {
-      toast.error("Passwords do not match.");
-      return;
-    }
-
-    setPasswordChangeLoading(true);
-    const { error } = await supabase.auth.updateUser({ password: newPassword });
-    setPasswordChangeLoading(false);
-
-    if (error) {
-      toast.error(error.message);
-      return;
-    }
-
-    toast.success("Password updated successfully.");
-    setNewPassword("");
-    setConfirmPassword("");
-  };
-
   const syncFromApplications = async () => {
     if (!user) return;
     setSyncing(true);
@@ -533,31 +500,6 @@ const ProfilePage = () => {
             </a>
           ))}
         </div>
-
-        <Card className="mb-6">
-          <CardHeader>
-            <CardTitle className="text-base">Account Security</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-sm text-muted-foreground mb-4">
-              Change your sign-in password here. This works only while you are logged in.
-            </p>
-            <form onSubmit={handlePasswordChange} className="space-y-3">
-              <div className="space-y-2">
-                <Label htmlFor="new-password">New password</Label>
-                <PasswordInput id="new-password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} required />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="confirm-password">Confirm password</Label>
-                <PasswordInput id="confirm-password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} required />
-              </div>
-              <Button type="submit" disabled={passwordChangeLoading}>
-                {passwordChangeLoading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
-                Change password
-              </Button>
-            </form>
-          </CardContent>
-        </Card>
 
         {/* CV upload */}
         <Card className="mb-6 border-primary/20">
