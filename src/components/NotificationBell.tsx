@@ -11,6 +11,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Link } from "react-router-dom";
 import { formatDistanceToNow } from "date-fns";
 import { useNotificationSound } from "@/hooks/useNotificationSound";
+import { applyNotificationUpdates, publishNotificationUpdates } from "@/lib/notifications";
 
 interface Notification {
   id: string;
@@ -36,9 +37,17 @@ export const NotificationBell = () => {
         .eq("user_id", user.id)
         .order("created_at", { ascending: false })
         .limit(15);
-      setItems(data ?? []);
+      setItems((data as Notification[]) ?? []);
     };
     load();
+
+    const syncFromEvent = (event: Event) => {
+      const detail = (event as CustomEvent<{ id: string; read_at: string | null }[]>).detail;
+      if (!detail?.length) return;
+      setItems((prev) => applyNotificationUpdates(prev, detail));
+    };
+
+    window.addEventListener("ufh:notifications-updated", syncFromEvent as EventListener);
 
     const channel = supabase
       .channel(`notifications-${user.id}`)
@@ -61,19 +70,24 @@ export const NotificationBell = () => {
       )
       .subscribe();
 
-    return () => { supabase.removeChannel(channel); };
+    return () => {
+      window.removeEventListener("ufh:notifications-updated", syncFromEvent as EventListener);
+      supabase.removeChannel(channel);
+    };
   }, [user, play]);
 
   const unread = items.filter((n) => !n.read_at).length;
 
   const markAllRead = async () => {
     if (!user) return;
-    await supabase
-      .from("notifications")
-      .update({ read_at: new Date().toISOString() })
-      .eq("user_id", user.id)
-      .is("read_at", null);
-    setItems((prev) => prev.map((n) => ({ ...n, read_at: n.read_at ?? new Date().toISOString() })));
+    const timestamp = new Date().toISOString();
+    const ids = items.filter((n) => !n.read_at).map((n) => n.id);
+    if (ids.length === 0) return;
+
+    await supabase.from("notifications").update({ read_at: timestamp }).in("id", ids);
+    const updates = ids.map((id) => ({ id, read_at: timestamp }));
+    setItems((prev) => applyNotificationUpdates(prev, updates));
+    publishNotificationUpdates(updates);
   };
 
   return (

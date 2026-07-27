@@ -11,6 +11,7 @@ import { Loader2, Bell, MessageSquare, Inbox, CheckCheck } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { useNotificationSound } from "@/hooks/useNotificationSound";
 import { UFHStateLoader } from "@/components/UFHStateLoader";
+import { applyNotificationUpdates, publishNotificationUpdates } from "@/lib/notifications";
 
 interface Notif {
   id: string;
@@ -35,6 +36,15 @@ const Notifications = () => {
 
   useEffect(() => {
     if (!user) return;
+
+    const syncFromEvent = (event: Event) => {
+      const detail = (event as CustomEvent<{ id: string; read_at: string | null }[]>).detail;
+      if (!detail?.length) return;
+      setItems((prev) => applyNotificationUpdates(prev, detail));
+    };
+
+    window.addEventListener("ufh:notifications-updated", syncFromEvent as EventListener);
+
     (async () => {
       const [nR, wR] = await Promise.all([
         supabase.from("notifications").select("*").eq("user_id", user.id).order("created_at", { ascending: false }).limit(200),
@@ -58,7 +68,10 @@ const Notifications = () => {
         (p) => { setItems((prev) => prev.map((n) => (n.id === p.new.id ? (p.new as Notif) : n))); }
       )
       .subscribe();
-    return () => { supabase.removeChannel(channel); };
+    return () => {
+      window.removeEventListener("ufh:notifications-updated", syncFromEvent as EventListener);
+      supabase.removeChannel(channel);
+    };
   }, [user, play]);
 
   const grouped = useMemo(() => {
@@ -89,21 +102,31 @@ const Notifications = () => {
 
   const markAllRead = async () => {
     if (!user) return;
-    await supabase.from("notifications").update({ read_at: new Date().toISOString() }).eq("user_id", user.id).is("read_at", null);
-    setItems((prev) => prev.map((n) => ({ ...n, read_at: n.read_at ?? new Date().toISOString() })));
+    const timestamp = new Date().toISOString();
+    const ids = items.filter((n) => !n.read_at).map((n) => n.id);
+    if (ids.length === 0) return;
+
+    await supabase.from("notifications").update({ read_at: timestamp }).in("id", ids);
+    const updates = ids.map((id) => ({ id, read_at: timestamp }));
+    setItems((prev) => applyNotificationUpdates(prev, updates));
+    publishNotificationUpdates(updates);
   };
 
   const markGroupRead = async (groupItems: Notif[]) => {
     const ids = groupItems.filter((n) => !n.read_at).map((n) => n.id);
     if (ids.length === 0) return;
-    await supabase.from("notifications").update({ read_at: new Date().toISOString() }).in("id", ids);
-    const set = new Set(ids);
-    setItems((prev) => prev.map((n) => set.has(n.id) ? { ...n, read_at: new Date().toISOString() } : n));
+    const timestamp = new Date().toISOString();
+    await supabase.from("notifications").update({ read_at: timestamp }).in("id", ids);
+    const updates = ids.map((id) => ({ id, read_at: timestamp }));
+    setItems((prev) => applyNotificationUpdates(prev, updates));
+    publishNotificationUpdates(updates);
   };
 
   const markOne = async (id: string) => {
-    await supabase.from("notifications").update({ read_at: new Date().toISOString() }).eq("id", id);
-    setItems((prev) => prev.map((n) => n.id === id ? { ...n, read_at: n.read_at ?? new Date().toISOString() } : n));
+    const timestamp = new Date().toISOString();
+    await supabase.from("notifications").update({ read_at: timestamp }).eq("id", id);
+    setItems((prev) => applyNotificationUpdates(prev, [{ id, read_at: timestamp }]));
+    publishNotificationUpdates([{ id, read_at: timestamp }]);
   };
 
   if (loading) {
