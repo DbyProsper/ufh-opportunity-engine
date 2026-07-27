@@ -165,10 +165,6 @@ const Auth = () => {
                     Forgot password?
                   </button>
                 </div>
-                <div className="rounded-md border border-amber-500/20 bg-amber-500/10 p-3 text-sm text-amber-700 dark:text-amber-300">
-                  <p className="font-medium">Password reset is coming soon.</p>
-                  <p className="mt-1">Please contact an administrator to change your password, or use a magic link to access your account.</p>
-                </div>
                 <Button type="submit" className="w-full btn-gradient-primary text-primary-foreground" disabled={loading}>
                   {loading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Mail className="w-4 h-4 mr-2" />}
                   Sign In
