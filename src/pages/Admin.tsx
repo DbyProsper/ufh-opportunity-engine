@@ -16,6 +16,7 @@ import { toast } from "sonner";
 import { rankApplications, RankedApplication } from "@/lib/ai";
 import { RankingExplainer } from "@/components/ai/RankingExplainer";
 import { Loader2, Plus, Sparkles, Eye, Check, X, ShieldAlert, Search, Settings2, Users, GraduationCap, Stamp, UserCheck } from "lucide-react";
+import { UFHStateLoader } from "@/components/UFHStateLoader";
 import { Trash2, Pencil } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
@@ -281,7 +282,7 @@ const Admin = () => {
     );
   }
 
-  if (loading) return <div className="min-h-screen bg-background"><AppHeader /><div className="container py-12 text-center"><Loader2 className="w-6 h-6 animate-spin mx-auto" /></div></div>;
+  if (loading) return <div className="min-h-screen bg-background"><AppHeader /><div className="container py-12 text-center"><UFHStateLoader message="Loading admin dashboard..." className="relative min-h-[240px]" /></div></div>;
 
   return (
     <div className="min-h-screen bg-background flex flex-col">

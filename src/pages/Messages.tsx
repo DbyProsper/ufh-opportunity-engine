@@ -5,7 +5,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, MessageSquare, Search } from "lucide-react";
+import { MessageSquare, Search } from "lucide-react";
+import { UFHStateLoader } from "@/components/UFHStateLoader";
 import { Input } from "@/components/ui/input";
 import { MessageThread } from "@/components/MessageThread";
 import { BackButton } from "@/components/BackButton";
@@ -121,7 +122,9 @@ const Messages = () => {
                 />
               </div>
               {loading ? (
-                <div className="py-10 text-center"><Loader2 className="w-5 h-5 animate-spin mx-auto text-muted-foreground" /></div>
+                <div className="relative min-h-[180px]">
+                  <UFHStateLoader message="Loading conversations..." />
+                </div>
               ) : filtered.length === 0 ? (
                 <div className="py-10 text-center text-sm text-muted-foreground">
                   No conversations yet.{" "}

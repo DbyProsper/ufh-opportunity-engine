@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { AppHeader } from "@/components/AppHeader";
 import { OpportunityCard } from "@/components/OpportunityCard";
+import { UFHStateLoader } from "@/components/UFHStateLoader";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { checkEligibility } from "@/lib/eligibility";
@@ -190,11 +191,14 @@ const Dashboard = () => {
         </div>
 
         {/* My Applications */}
-        {apps.length > 0 && (
-          <section id="my-applications" className="mb-10 scroll-mt-24">
-            <h2 className="text-xl font-semibold text-foreground mb-4">My Applications</h2>
-            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {apps.map((app) => {
+        <section id="my-applications" className="mb-10 scroll-mt-24 relative min-h-[220px]">
+          {loading ? (
+            <UFHStateLoader message="Loading your applications..." />
+          ) : apps.length > 0 ? (
+            <>
+              <h2 className="text-xl font-semibold text-foreground mb-4">My Applications</h2>
+              <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                {apps.map((app) => {
                 const wf = workflows.find((w) => w.id === app.workflow_id);
                 if (!wf) return null;
                 const canDelete = app.status === "draft";
@@ -232,10 +236,11 @@ const Dashboard = () => {
                     </CardContent>
                   </Card>
                 );
-              })}
-            </div>
-          </section>
-        )}
+                })}
+              </div>
+            </>
+          ) : null}
+        </section>
 
         {/* Opportunities */}
         <section>

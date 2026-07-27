@@ -11,6 +11,7 @@ import { Loader2, ShieldAlert, Filter, Eye } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { BackButton } from "@/components/BackButton";
+import { UFHStateLoader } from "@/components/UFHStateLoader";
 
 interface AuditRow {
   id: string;
@@ -140,7 +141,7 @@ const AdminAudit = () => {
         <Card>
           <CardHeader><CardTitle className="text-base flex items-center gap-2"><Filter className="w-4 h-4" /> {filtered.length} entries</CardTitle></CardHeader>
           <CardContent>
-            {loading ? <Loader2 className="w-5 h-5 animate-spin mx-auto" /> :
+            {loading ? <div className="relative min-h-[220px] rounded-lg border bg-muted/20"><UFHStateLoader message="Loading audit trail..." className="rounded-lg" /></div> :
              filtered.length === 0 ? <p className="text-sm text-muted-foreground text-center py-6">Nothing matches.</p> :
              <div className="space-y-1.5">
                {filtered.map((r) => (

@@ -3,6 +3,7 @@ import { AppHeader } from "@/components/AppHeader";
 import { BackButton } from "@/components/BackButton";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
+import { UFHStateLoader } from "@/components/UFHStateLoader";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -465,7 +466,11 @@ const ProfilePage = () => {
     return (
       <div className="min-h-screen bg-background">
         <AppHeader />
-        <div className="container mx-auto px-4 py-8"><Loader2 className="w-6 h-6 animate-spin mx-auto" /></div>
+        <main className="container mx-auto px-4 py-12">
+          <div className="relative min-h-[280px] overflow-hidden rounded-2xl border bg-card/50">
+            <UFHStateLoader message="Loading your profile..." />
+          </div>
+        </main>
       </div>
     );
   }

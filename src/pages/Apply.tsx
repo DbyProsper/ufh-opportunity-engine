@@ -26,6 +26,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { checkEligibility } from "@/lib/eligibility";
 import { ApprovalCelebration } from "@/components/ApprovalCelebration";
 import { OpportunityImage } from "@/components/OpportunityImage";
+import { UFHStateLoader } from "@/components/UFHStateLoader";
 
 const Apply = () => {
   const { slug } = useParams();
@@ -320,7 +321,16 @@ const Apply = () => {
   };
 
   if (loading) {
-    return <div className="min-h-screen bg-background"><AppHeader /><div className="container mx-auto py-12 text-center"><Loader2 className="w-6 h-6 animate-spin mx-auto" /></div></div>;
+    return (
+      <div className="min-h-screen bg-background">
+        <AppHeader />
+        <main className="container mx-auto px-4 py-12">
+          <div className="relative min-h-[320px] overflow-hidden rounded-2xl border bg-card/50">
+            <UFHStateLoader message="Preparing your application..." />
+          </div>
+        </main>
+      </div>
+    );
   }
 
   if (!workflow) {

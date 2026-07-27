@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Loader2, Bell, MessageSquare, Inbox, CheckCheck } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { useNotificationSound } from "@/hooks/useNotificationSound";
+import { UFHStateLoader } from "@/components/UFHStateLoader";
 
 interface Notif {
   id: string;
@@ -106,7 +107,16 @@ const Notifications = () => {
   };
 
   if (loading) {
-    return <div className="min-h-screen bg-background"><AppHeader /><div className="container py-12 text-center"><Loader2 className="w-6 h-6 animate-spin mx-auto" /></div></div>;
+    return (
+      <div className="min-h-screen bg-background">
+        <AppHeader />
+        <main className="container mx-auto px-4 py-12">
+          <div className="relative min-h-[280px] overflow-hidden rounded-2xl border bg-card/50">
+            <UFHStateLoader message="Loading notifications..." />
+          </div>
+        </main>
+      </div>
+    );
   }
 
   return (
