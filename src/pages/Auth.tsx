@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { PasswordInput } from "@/components/ui/password-input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
@@ -96,6 +97,10 @@ const Auth = () => {
     toast.info("Microsoft sign-in is coming soon. Please use your UFH email and password for now.");
   };
 
+  const handleForgotPassword = () => {
+    toast.info("Password reset via email is coming soon. Please contact an administrator to change your password, or use a magic link to access your account.");
+  };
+
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-hero-gradient p-4">
       <Link to="/" className="flex items-center gap-3 mb-8">
@@ -153,7 +158,16 @@ const Auth = () => {
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="signin-pwd">Password</Label>
-                  <Input id="signin-pwd" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
+                  <PasswordInput id="signin-pwd" value={password} onChange={(e) => setPassword(e.target.value)} required />
+                </div>
+                <div className="flex items-center justify-end">
+                  <button type="button" onClick={handleForgotPassword} className="text-sm text-primary hover:underline">
+                    Forgot password?
+                  </button>
+                </div>
+                <div className="rounded-md border border-amber-500/20 bg-amber-500/10 p-3 text-sm text-amber-700 dark:text-amber-300">
+                  <p className="font-medium">Password reset is coming soon.</p>
+                  <p className="mt-1">Please contact an administrator to change your password, or use a magic link to access your account.</p>
                 </div>
                 <Button type="submit" className="w-full btn-gradient-primary text-primary-foreground" disabled={loading}>
                   {loading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Mail className="w-4 h-4 mr-2" />}
@@ -206,7 +220,7 @@ const Auth = () => {
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="signup-pwd">Password</Label>
-                  <Input id="signup-pwd" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={8} />
+                  <PasswordInput id="signup-pwd" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={8} />
                   <p className="text-xs text-muted-foreground">At least 8 characters</p>
                 </div>
                 <Button type="submit" className="w-full btn-gradient-primary text-primary-foreground" disabled={loading}>
