@@ -217,63 +217,71 @@ const Dashboard = () => {
         <section id="my-applications" className="mb-10 scroll-mt-24 relative min-h-[220px]">
           {loading ? (
             <UFHStateLoader message="Loading your applications..." />
-          ) : visibleApps.length > 0 ? (
+          ) : (
             <>
               <div className="flex items-center justify-between gap-3 mb-4">
                 <h2 className="text-xl font-semibold text-foreground">My Applications</h2>
                 <Link to="/applications" className="text-sm text-primary hover:underline">View all history</Link>
               </div>
-              <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                {visibleApps.map((app) => {
-                const wf = workflows.find((w) => w.id === app.workflow_id);
-                if (!wf) return null;
-                const canDelete = app.status === "draft";
-                const canWithdraw = app.status === "submitted";
-                return (
-                  <Card key={app.id} className="hover:shadow-lg transition-all h-full flex flex-col relative">
-                    <Button
-                      type="button"
-                      size="icon"
-                      variant="ghost"
-                      className="absolute right-2 top-2 h-8 w-8 rounded-full"
-                      onClick={() => setDismissedApps((prev) => [...prev, app.id])}
-                      title="Hide from dashboard"
-                    >
-                      <XCircle className="w-4 h-4" />
-                    </Button>
-                    <CardContent className="p-5 flex-1 flex flex-col pr-12">
-                      <Link to={`/apply/${wf.slug}`} className="flex-1">
-                        <div className="flex items-start justify-between gap-2 mb-2">
-                          <h3 className="font-semibold leading-tight">{wf.name}</h3>
-                          <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium status-${app.status.replace("_","-")}`}>
-                            {app.status.replace("_", " ")}
-                          </span>
-                        </div>
-                        <p className="text-xs text-muted-foreground line-clamp-2">{wf.description}</p>
-                      </Link>
-                      {(canDelete || canWithdraw) && (
-                        <div className="flex gap-1.5 mt-3 pt-3 border-t">
-                          {canDelete && (
-                            <Button size="sm" variant="outline" className="text-destructive flex-1"
-                              onClick={() => setConfirm({ kind: "delete", app, wfName: wf.name })}>
-                              <Trash2 className="w-3 h-3 mr-1" /> Delete draft
-                            </Button>
-                          )}
-                          {canWithdraw && (
-                            <Button size="sm" variant="outline" className="text-destructive flex-1"
-                              onClick={() => setConfirm({ kind: "withdraw", app, wfName: wf.name })}>
-                              <XCircle className="w-3 h-3 mr-1" /> Withdraw
-                            </Button>
-                          )}
-                        </div>
-                      )}
-                    </CardContent>
-                  </Card>
-                );
-                })}
-              </div>
+              {visibleApps.length > 0 ? (
+                <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {visibleApps.map((app) => {
+                  const wf = workflows.find((w) => w.id === app.workflow_id);
+                  if (!wf) return null;
+                  const canDelete = app.status === "draft";
+                  const canWithdraw = app.status === "submitted";
+                  return (
+                    <Card key={app.id} className="hover:shadow-lg transition-all h-full flex flex-col relative">
+                      <Button
+                        type="button"
+                        size="icon"
+                        variant="ghost"
+                        className="absolute right-2 top-2 h-8 w-8 rounded-full"
+                        onClick={() => setDismissedApps((prev) => [...prev, app.id])}
+                        title="Hide from dashboard"
+                      >
+                        <XCircle className="w-4 h-4" />
+                      </Button>
+                      <CardContent className="p-5 flex-1 flex flex-col pr-12">
+                        <Link to={`/apply/${wf.slug}`} className="flex-1">
+                          <div className="flex items-start justify-between gap-2 mb-2">
+                            <h3 className="font-semibold leading-tight">{wf.name}</h3>
+                            <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium status-${app.status.replace("_","-")}`}>
+                              {app.status.replace("_", " ")}
+                            </span>
+                          </div>
+                          <p className="text-xs text-muted-foreground line-clamp-2">{wf.description}</p>
+                        </Link>
+                        {(canDelete || canWithdraw) && (
+                          <div className="flex gap-1.5 mt-3 pt-3 border-t">
+                            {canDelete && (
+                              <Button size="sm" variant="outline" className="text-destructive flex-1"
+                                onClick={() => setConfirm({ kind: "delete", app, wfName: wf.name })}>
+                                <Trash2 className="w-3 h-3 mr-1" /> Delete draft
+                              </Button>
+                            )}
+                            {canWithdraw && (
+                              <Button size="sm" variant="outline" className="text-destructive flex-1"
+                                onClick={() => setConfirm({ kind: "withdraw", app, wfName: wf.name })}>
+                                <XCircle className="w-3 h-3 mr-1" /> Withdraw
+                              </Button>
+                            )}
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
+                  );
+                  })}
+                </div>
+              ) : (
+                <Card>
+                  <CardContent className="p-8 text-center text-sm text-muted-foreground">
+                    You currently have no applications visible on the dashboard. View your full history anytime.
+                  </CardContent>
+                </Card>
+              )}
             </>
-          ) : null}
+          )}
         </section>
 
         {/* Opportunities */}

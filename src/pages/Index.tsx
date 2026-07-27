@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { AppHeader } from "@/components/AppHeader";
+import { SiteFooter } from "@/components/SiteFooter";
 import { Typewriter } from "@/components/Typewriter";
 
 const Index = () => {
@@ -156,15 +157,7 @@ const Index = () => {
         </div>
       </section>
 
-      {/* Footer */}
-      <footer className="py-8 bg-foreground text-background mt-auto">
-        <div className="container mx-auto px-4">
-          <div className="flex flex-col md:flex-row items-center justify-between gap-4">
-            <p className="text-sm opacity-80">© {new Date().getFullYear()} University of Fort Hare. All rights reserved.</p>
-            <p className="text-xs opacity-60">UFH Opportunity Hub</p>
-          </div>
-        </div>
-      </footer>
+      <SiteFooter />
     </div>
   );
 };
