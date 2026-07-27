@@ -8,7 +8,6 @@ import { checkEligibility } from "@/lib/eligibility";
 import type { Tables } from "@/integrations/supabase/types";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Skeleton } from "@/components/ui/skeleton";
 import { Link, useNavigate } from "react-router-dom";
 import { ArrowRight, FileText, CheckCircle2, Clock, AlertCircle, User as UserIcon, Activity, Bell, History, ExternalLink, Eye } from "lucide-react";
 import { Trash2, XCircle } from "lucide-react";
@@ -33,6 +32,7 @@ const Dashboard = () => {
   const [externals, setExternals] = useState<ExternalOpp[]>([]);
   const [externalOpen, setExternalOpen] = useState<ExternalOpp | null>(null);
   const [loading, setLoading] = useState(true);
+  const [showLoader, setShowLoader] = useState(true);
   const [unreadCount, setUnreadCount] = useState(0);
   const [confirm, setConfirm] = useState<null | { kind: "delete" | "withdraw"; app: Application; wfName: string }>(null);
   const [busy, setBusy] = useState(false);
@@ -44,6 +44,15 @@ const Dashboard = () => {
 
   useEffect(() => {
     if (!user) return;
+
+    let mounted = true;
+    setLoading(true);
+    setShowLoader(true);
+
+    const minDisplayTimer = window.setTimeout(() => {
+      if (mounted) setShowLoader(false);
+    }, 400);
+
     (async () => {
       const [profRes, wfRes, ruleRes, appRes, extRes] = await Promise.all([
         supabase.from("profiles").select("*").eq("id", user.id).maybeSingle(),
@@ -52,6 +61,9 @@ const Dashboard = () => {
         supabase.from("applications").select("*").eq("user_id", user.id),
         supabase.from("external_opportunities" as any).select("*").eq("status", "published").order("created_at", { ascending: false }),
       ]);
+
+      if (!mounted) return;
+
       setProfile(profRes.data);
       setWorkflows(wfRes.data ?? []);
       setRules(ruleRes.data ?? []);
@@ -63,9 +75,12 @@ const Dashboard = () => {
         .select("id", { count: "exact", head: true })
         .eq("user_id", user.id)
         .is("read_at", null);
-      setUnreadCount(count ?? 0);
+      if (!mounted) return;
 
+      setUnreadCount(count ?? 0);
+      window.clearTimeout(minDisplayTimer);
       setLoading(false);
+      setShowLoader(false);
 
       // Only redirect to profile if the user explicitly needs to complete it.
       // Avoid forcing navigation away from the dashboard on every initial load.
@@ -78,6 +93,11 @@ const Dashboard = () => {
         }
       }
     })();
+
+    return () => {
+      mounted = false;
+      window.clearTimeout(minDisplayTimer);
+    };
   }, [user, roles, navigate]);
 
   const eligibleCount = workflows.filter(
@@ -94,16 +114,15 @@ const Dashboard = () => {
   if (!isStaff && !profile?.student_number) missingProfileBits.push("student number");
   const profileComplete = missingProfileBits.length === 0;
 
-  if (loading) {
+  if (loading || showLoader) {
     return (
       <div className="min-h-screen bg-background">
         <AppHeader />
-        <div className="container mx-auto px-4 py-8 space-y-6">
-          <Skeleton className="h-32 w-full" />
-          <div className="grid md:grid-cols-3 gap-4">
-            {[1, 2, 3].map((i) => <Skeleton key={i} className="h-64" />)}
+        <main className="container mx-auto px-4 py-12">
+          <div className="relative min-h-[360px] overflow-hidden rounded-2xl border bg-card/50">
+            <UFHStateLoader message="Loading your dashboard..." />
           </div>
-        </div>
+        </main>
       </div>
     );
   }
