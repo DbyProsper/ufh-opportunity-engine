@@ -14,6 +14,7 @@ import Apply from "./pages/Apply.tsx";
 import Admin from "./pages/Admin.tsx";
 import Notifications from "./pages/Notifications.tsx";
 import AdminAudit from "./pages/AdminAudit.tsx";
+import ApplicationsHistory from "./pages/ApplicationsHistory.tsx";
 import Messages from "./pages/Messages.tsx";
 import AcceptInvite from "./pages/AcceptInvite.tsx";
 import Settings from "./pages/Settings.tsx";
@@ -38,6 +39,7 @@ const App = () => (
             <Route path="/admin" element={<Admin />} />
             <Route path="/admin/audit" element={<AdminAudit />} />
             <Route path="/notifications" element={<Notifications />} />
+            <Route path="/applications" element={<ApplicationsHistory />} />
             <Route path="/messages" element={<Messages />} />
             <Route path="/accept-invite" element={<AcceptInvite />} />
             <Route path="/settings" element={<Settings />} />

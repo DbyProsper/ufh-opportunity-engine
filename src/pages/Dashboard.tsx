@@ -17,6 +17,7 @@ import { formatDistanceToNow } from "date-fns";
 import { OpportunityDetailsDialog } from "@/components/OpportunityDetailsDialog";
 import { OpportunityImage } from "@/components/OpportunityImage";
 import { Badge } from "@/components/ui/badge";
+import { getVisibleApplications } from "@/lib/applicationHistory";
 
 type Workflow = Tables<"workflows">;
 type Application = Tables<"applications">;
@@ -34,6 +35,7 @@ const Dashboard = () => {
   const [loading, setLoading] = useState(true);
   const [showLoader, setShowLoader] = useState(true);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [dismissedApps, setDismissedApps] = useState<string[]>([]);
   const [confirm, setConfirm] = useState<null | { kind: "delete" | "withdraw"; app: Application; wfName: string }>(null);
   const [busy, setBusy] = useState(false);
   const isAdmin = roles.includes("admin");
@@ -99,6 +101,8 @@ const Dashboard = () => {
       window.clearTimeout(minDisplayTimer);
     };
   }, [user, roles, navigate]);
+
+  const visibleApps = getVisibleApplications(apps, dismissedApps);
 
   const eligibleCount = workflows.filter(
     (w) => checkEligibility(profile, roles, w, rules.filter((r) => r.workflow_id === w.id)).eligible
@@ -185,11 +189,11 @@ const Dashboard = () => {
 
         {/* Stats */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-8">
-          <StatCard icon={FileText} label="My Applications" value={apps.length} color="primary"
+          <StatCard icon={FileText} label="My Applications" value={visibleApps.length} color="primary"
             onClick={() => document.getElementById("my-applications")?.scrollIntoView({ behavior: "smooth" })} />
-          <StatCard icon={Clock} label="In Progress" value={apps.filter(a => a.status === "draft" || a.status === "submitted" || a.status === "under_review").length} color="warning"
+          <StatCard icon={Clock} label="In Progress" value={visibleApps.filter(a => a.status === "draft" || a.status === "submitted" || a.status === "under_review").length} color="warning"
             onClick={() => document.getElementById("my-applications")?.scrollIntoView({ behavior: "smooth" })} />
-          <StatCard icon={CheckCircle2} label="Approved" value={apps.filter(a => a.status === "approved").length} color="success"
+          <StatCard icon={CheckCircle2} label="Approved" value={visibleApps.filter(a => a.status === "approved").length} color="success"
             onClick={() => document.getElementById("my-applications")?.scrollIntoView({ behavior: "smooth" })} />
           <Link to="/notifications" className="block">
             <Card className="border-0 shadow-sm hover:shadow-md transition relative">
@@ -213,20 +217,31 @@ const Dashboard = () => {
         <section id="my-applications" className="mb-10 scroll-mt-24 relative min-h-[220px]">
           {loading ? (
             <UFHStateLoader message="Loading your applications..." />
-          ) : apps.length > 0 ? (
+          ) : visibleApps.length > 0 ? (
             <>
-              <h2 className="text-xl font-semibold text-foreground mb-4">My Applications</h2>
+              <div className="flex items-center justify-between gap-3 mb-4">
+                <h2 className="text-xl font-semibold text-foreground">My Applications</h2>
+                <Link to="/applications" className="text-sm text-primary hover:underline">View all history</Link>
+              </div>
               <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                {apps.map((app) => {
+                {visibleApps.map((app) => {
                 const wf = workflows.find((w) => w.id === app.workflow_id);
                 if (!wf) return null;
                 const canDelete = app.status === "draft";
-                // Withdrawal is only allowed while the application is still "submitted".
-                // Once a reviewer starts reviewing, the user must contact the reviewer.
                 const canWithdraw = app.status === "submitted";
                 return (
-                  <Card key={app.id} className="hover:shadow-lg transition-all h-full flex flex-col">
-                    <CardContent className="p-5 flex-1 flex flex-col">
+                  <Card key={app.id} className="hover:shadow-lg transition-all h-full flex flex-col relative">
+                    <Button
+                      type="button"
+                      size="icon"
+                      variant="ghost"
+                      className="absolute right-2 top-2 h-8 w-8 rounded-full"
+                      onClick={() => setDismissedApps((prev) => [...prev, app.id])}
+                      title="Hide from dashboard"
+                    >
+                      <XCircle className="w-4 h-4" />
+                    </Button>
+                    <CardContent className="p-5 flex-1 flex flex-col pr-12">
                       <Link to={`/apply/${wf.slug}`} className="flex-1">
                         <div className="flex items-start justify-between gap-2 mb-2">
                           <h3 className="font-semibold leading-tight">{wf.name}</h3>
