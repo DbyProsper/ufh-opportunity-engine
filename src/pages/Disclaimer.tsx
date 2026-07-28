@@ -18,7 +18,7 @@ const Disclaimer = () => (
         </div>
 
         <div className="space-y-4 text-sm leading-7 text-muted-foreground">
-          <p>The information provided on the University of Fort Hare (UFH) website (www.ufh.ac.za) is for general informational purposes only. While every effort is made to ensure that the content is accurate, complete, and up-to-date, UFH does not guarantee or warrant the accuracy, reliability, or completeness of any information on this site.</p>
+          <p>The information provided on the University of Fort Hare (UFH) Opportunity Hub is for general informational purposes only. While every effort is made to ensure that the content is accurate, complete, and up-to-date, UFH does not guarantee or warrant the accuracy, reliability, or completeness of any information on this site.</p>
           <p>Visitors to this website use the information at their own risk. UFH will not be held liable for any loss, damage, or inconvenience arising from the use of this website or reliance on any information provided, whether direct, indirect, incidental, or consequential.</p>
           <p>Links to external websites are provided for convenience and informational purposes only. UFH has no control over the content or availability of these sites and does not endorse or accept any responsibility for their content, policies, or practices.</p>
           <p>UFH reserves the right to update, modify, or remove content on this website without prior notice. Users are encouraged to verify the information and consult appropriate professionals or departments at UFH for specific advice or guidance.</p>
